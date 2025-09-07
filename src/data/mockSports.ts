@@ -3,7 +3,7 @@ import { Sport } from '@/types';
 export const mockSports: Sport[] = [
   {
     id: '1',
-    name: 'Infantil (3 à 5 anos)',
+    name: 'Infantil (03 à 05 anos)',
     description: 'Aulas de futebol para crianças de 3 a 5 anos - Iniciação esportiva',
     ageRange: { min: 3, max: 5 },
     monthlyFee: 120.00,
@@ -19,7 +19,7 @@ export const mockSports: Sport[] = [
   },
   {
     id: '2',
-    name: 'Infantil 2 (6 à 9 anos)',
+    name: 'Infantil 2 (06 à 09 anos)',
     description: 'Aulas de futebol para crianças de 6 a 9 anos - Desenvolvimento motor',
     ageRange: { min: 6, max: 9 },
     monthlyFee: 150.00,

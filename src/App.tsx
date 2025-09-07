@@ -14,6 +14,11 @@ import Teachers from "./pages/Teachers";
 import Roles from "./pages/Roles";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import Employees from "./pages/Employees";
+import Modalities from "./pages/Modalities";
+import NewStudent from "./pages/NewStudent";
+import NewEvent from "./pages/NewEvent";
+import InauguralClass from "./pages/InauguralClass";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +39,11 @@ const App = () => (
               <Route path="/enrollment" element={<Enrollment />} />
               <Route path="/teachers" element={<Teachers />} />
               <Route path="/roles" element={<Roles />} />
+              <Route path="/employees" element={<Employees />} />
+              <Route path="/modalities" element={<Modalities />} />
+              <Route path="/students/new" element={<NewStudent />} />
+              <Route path="/events/new" element={<NewEvent />} />
+              <Route path="/inaugural-class" element={<InauguralClass />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>
