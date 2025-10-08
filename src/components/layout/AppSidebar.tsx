@@ -14,7 +14,8 @@ import {
   TrendingUp,
   PieChart,
   Trophy,
-  ChevronDown
+  ChevronDown,
+  LogOut
 } from 'lucide-react';
 import {
   Sidebar,
@@ -28,6 +29,8 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 
 const menuGroups = [
   {
@@ -75,6 +78,7 @@ export function AppSidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
   const [expandedGroups, setExpandedGroups] = useState<number[]>([]);
+  const { user, signOut, isLoading: isAuthLoading } = useAuth();
 
   const isActive = (path: string) => currentPath === path;
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
@@ -86,6 +90,16 @@ export function AppSidebar() {
         ? prev.filter(i => i !== index)
         : [...prev, index]
     );
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+      // Opcional: exibir uma notificação de erro ao usuário
+      // toast.error('Falha ao fazer logout. Tente novamente.');
+    }
   };
 
   return (
@@ -123,6 +137,21 @@ export function AppSidebar() {
             </SidebarGroup>
           );
         })}
+        
+        {/* Botão de Logout - aparece apenas quando o usuário estiver autenticado */}
+        {user && (
+          <div className="p-2 mt-auto">
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start" 
+              onClick={handleLogout}
+              disabled={isAuthLoading}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>{isAuthLoading ? 'Saindo...' : 'Sair'}</span>
+            </Button>
+          </div>
+        )}
       </SidebarContent>
     </Sidebar>
   );

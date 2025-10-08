@@ -8,13 +8,20 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Pencil, Trash2, Users, Trophy } from 'lucide-react';
-import { mockTeachers } from '@/data/mockTeachers';
-import { mockSports } from '@/data/mockSports';
-import { Teacher } from '@/types';
+import { Teacher, Sport } from '@/types';
 import { toast } from 'sonner';
+import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher } from '@/hooks/useTeachers';
+import { useSports } from '@/hooks/useSports';
+import { Loader2 } from 'lucide-react';
 
 const Teachers: React.FC = () => {
-  const [teachers, setTeachers] = useState(mockTeachers);
+  const { data: teachers = [], isLoading: teachersLoading, isError: teachersError, refetch: refetchTeachers } = useTeachers();
+  const { data: sports = [], isLoading: sportsLoading, isError: sportsError } = useSports();
+  
+  const createTeacherMutation = useCreateTeacher();
+  const updateTeacherMutation = useUpdateTeacher();
+  const deleteTeacherMutation = useDeleteTeacher();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [formData, setFormData] = useState({
@@ -47,11 +54,10 @@ const Teachers: React.FC = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const teacherData: Teacher = {
-      id: editingTeacher?.id || Date.now().toString(),
+    const teacherData: Omit<Teacher, 'id' | 'createdAt' | 'updated_at'> = {
       fullName: formData.fullName,
       nickname: formData.nickname,
       identity: formData.identity,
@@ -66,18 +72,24 @@ const Teachers: React.FC = () => {
       modalitiesIds: formData.modalitiesIds,
       status: 'active',
       hireDate: editingTeacher?.hireDate || new Date().toISOString().split('T')[0],
-      salary: parseFloat(formData.salary)
+      salary: parseFloat(formData.salary),
+      createdAt: editingTeacher?.createdAt || new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
-    if (editingTeacher) {
-      setTeachers(prev => prev.map(t => t.id === editingTeacher.id ? teacherData : t));
-      toast.success('Professor atualizado com sucesso!');
-    } else {
-      setTeachers(prev => [...prev, teacherData]);
-      toast.success('Professor cadastrado com sucesso!');
+    try {
+      if (editingTeacher) {
+        await updateTeacherMutation.mutateAsync({ id: editingTeacher.id, data: teacherData });
+        toast.success('Professor atualizado com sucesso!');
+      } else {
+        await createTeacherMutation.mutateAsync(teacherData);
+        toast.success('Professor cadastrado com sucesso!');
+      }
+      resetForm();
+    } catch (error) {
+      console.error('Error saving teacher:', error);
+      toast.error('Erro ao salvar professor: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
-
-    resetForm();
   };
 
   const resetForm = () => {
@@ -114,20 +126,30 @@ const Teachers: React.FC = () => {
       phone: teacher.phone,
       email: teacher.email,
       address: teacher.address,
-      modalitiesIds: teacher.modalitiesIds,
+      modalitiesIds: teacher.modalitiesIds || [],
       salary: teacher.salary.toString()
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setTeachers(prev => prev.filter(t => t.id !== id));
-    toast.success('Professor removido com sucesso!');
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este professor? Esta ação não pode ser desfeita.')) {
+      try {
+        await deleteTeacherMutation.mutateAsync(id);
+        toast.success('Professor removido com sucesso!');
+      } catch (error) {
+        console.error('Error deleting teacher:', error);
+        toast.error('Erro ao remover professor: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      }
+    }
   };
 
-  const getModalityNames = (modalityIds: string[]) => {
+  const getModalityNames = (modalityIds: string[] | undefined | null) => {
+    if (!modalityIds || !Array.isArray(modalityIds)) {
+      return [];
+    }
     return modalityIds.map(id => {
-      const modality = mockSports.find(s => s.id === id);
+      const modality = sports.find(s => s.id === id);
       return modality?.name || '';
     }).filter(Boolean);
   };
@@ -141,9 +163,23 @@ const Teachers: React.FC = () => {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => resetForm()}>
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Professor
+            <Button onClick={() => resetForm()} disabled={createTeacherMutation.isPending || updateTeacherMutation.isPending || sportsLoading}>
+              {createTeacherMutation.isPending || updateTeacherMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {editingTeacher ? 'Atualizando...' : 'Cadastrando...'}
+                </>
+              ) : sportsLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Carregando...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Novo Professor
+                </>
+              )}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -287,30 +323,53 @@ const Teachers: React.FC = () => {
 
               <div className="space-y-2">
                 <Label>Modalidades</Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {mockSports.filter(sport => sport.name !== 'Aula Inaugural').map(sport => (
-                    <div key={sport.id} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id={`modality-${sport.id}`}
-                        checked={formData.modalitiesIds.includes(sport.id)}
-                        onChange={() => handleModalityToggle(sport.id)}
-                        className="rounded border-gray-300"
-                      />
-                      <label htmlFor={`modality-${sport.id}`} className="text-sm">
-                        {sport.name}
-                      </label>
-                    </div>
-                  ))}
-                </div>
+                {sportsLoading ? (
+                  <div className="flex justify-center items-center h-20">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : sportsError ? (
+                  <div className="text-destructive">Erro ao carregar modalidades</div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {sports.filter(sport => sport.name !== 'Aula Inaugural').map(sport => (
+                      <div key={sport.id} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`modality-${sport.id}`}
+                          checked={formData.modalitiesIds.includes(sport.id)}
+                          onChange={() => handleModalityToggle(sport.id)}
+                          className="rounded border-gray-300"
+                        />
+                        <label htmlFor={`modality-${sport.id}`} className="text-sm">
+                          {sport.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={resetForm}>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={resetForm}
+                  disabled={createTeacherMutation.isPending || updateTeacherMutation.isPending}
+                >
                   Cancelar
                 </Button>
-                <Button type="submit">
-                  {editingTeacher ? 'Atualizar' : 'Cadastrar'}
+                <Button 
+                  type="submit"
+                  disabled={createTeacherMutation.isPending || updateTeacherMutation.isPending}
+                >
+                  {createTeacherMutation.isPending || updateTeacherMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {editingTeacher ? 'Atualizando...' : 'Cadastrando...'}
+                    </>
+                  ) : (
+                    editingTeacher ? 'Atualizar' : 'Cadastrar'
+                  )}
                 </Button>
               </DialogFooter>
             </form>
@@ -318,79 +377,125 @@ const Teachers: React.FC = () => {
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Lista de Professores
-          </CardTitle>
-          <CardDescription>
-            {teachers.length} professor(es) cadastrado(s)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome / Apelido</TableHead>
-                <TableHead>Contato</TableHead>
-                <TableHead>Modalidades</TableHead>
-                <TableHead>Salário</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {teachers.map(teacher => (
-                <TableRow key={teacher.id}>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">{teacher.fullName}</p>
-                      <p className="text-sm text-muted-foreground">{teacher.nickname}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="text-sm">{teacher.phone}</p>
-                      <p className="text-sm text-muted-foreground">{teacher.email}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {getModalityNames(teacher.modalitiesIds).slice(0, 2).map(name => (
-                        <Badge key={name} variant="secondary" className="text-xs">
-                          {name}
-                        </Badge>
-                      ))}
-                      {teacher.modalitiesIds.length > 2 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{teacher.modalitiesIds.length - 2}
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>R$ {teacher.salary.toFixed(2)}</TableCell>
-                  <TableCell>
-                    <Badge variant={teacher.status === 'active' ? 'default' : 'secondary'}>
-                      {teacher.status === 'active' ? 'Ativo' : 'Inativo'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => handleEdit(teacher)}>
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleDelete(teacher.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+      {teachersLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="ml-2">Carregando professores...</span>
+        </div>
+      ) : teachersError ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Lista de Professores
+            </CardTitle>
+            <CardDescription>
+              Erro ao carregar professores
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col items-center justify-center">
+              <p className="text-destructive text-lg mb-2">Erro ao carregar os professores</p>
+              <p className="text-muted-foreground mb-4">Verifique sua conexão e tente novamente</p>
+              <Button onClick={() => refetchTeachers()}>Tentar novamente</Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Lista de Professores
+            </CardTitle>
+            <CardDescription>
+              {teachers.length} professor(es) cadastrado(s)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome / Apelido</TableHead>
+                  <TableHead>Contato</TableHead>
+                  <TableHead>Modalidades</TableHead>
+                  <TableHead>Salário</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {teachers.map(teacher => (
+                  <TableRow key={teacher.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{teacher.fullName}</p>
+                        <p className="text-sm text-muted-foreground">{teacher.nickname}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="text-sm">{teacher.phone}</p>
+                        <p className="text-sm text-muted-foreground">{teacher.email}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {teacher.modalitiesIds && Array.isArray(teacher.modalitiesIds) && teacher.modalitiesIds.length > 0 ? (
+                          <>
+                            {getModalityNames(teacher.modalitiesIds).slice(0, 2).map(name => (
+                              <Badge key={name} variant="secondary" className="text-xs">
+                                {name}
+                              </Badge>
+                            ))}
+                            {teacher.modalitiesIds.length > 2 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{teacher.modalitiesIds.length - 2}
+                              </Badge>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Nenhuma</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>R$ {(teacher.salary || 0).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <Badge variant={teacher.status === 'active' ? 'default' : 'secondary'}>
+                        {teacher.status === 'active' ? 'Ativo' : 'Inativo'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleEdit(teacher)}
+                          disabled={deleteTeacherMutation.isPending}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleDelete(teacher.id)}
+                          disabled={deleteTeacherMutation.isPending}
+                        >
+                          {deleteTeacherMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

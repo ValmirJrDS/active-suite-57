@@ -1,23 +1,60 @@
 import React, { useState } from 'react';
 import { Calendar as CalendarIcon, Plus, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
-import { mockEvents } from '@/data/mockEvents';
-import { mockSports } from '@/data/mockSports';
+import { useEvents } from '@/hooks/useEvents';
+import { useSports } from '@/hooks/useSports';
+import { Link } from 'react-router-dom';
 import Button from '@/components/shared/Button';
 
 const Calendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedSport, setSelectedSport] = useState<string>('all');
   
+  // Get events and sports from Supabase
+  const { data: events = [], isLoading, isError } = useEvents();
+  const { data: sports = [], isLoading: sportsLoading, isError: sportsError } = useSports();
+  
   // Get current month events
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
   
-  const monthEvents = mockEvents.filter(event => {
+  // Format events to match the calendar requirements
+  const formattedEvents = events.map(event => ({
+    id: event.id,
+    title: event.title,
+    date: `${event.date}T${event.start_time}`, // Format date and time together
+    startTime: event.start_time,
+    type: event.type || 'training',
+    sport: event.sport_id || '', // Use UUID directly
+  }));
+  
+  const monthEvents = formattedEvents.filter(event => {
     const eventDate = new Date(event.date);
     const matchesMonth = eventDate.getMonth() === currentMonth && eventDate.getFullYear() === currentYear;
     const matchesSport = selectedSport === 'all' || event.sport === selectedSport;
     return matchesMonth && matchesSport;
   });
+  
+  if (isLoading || sportsLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center py-10">
+          <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
+          <p className="mt-3 text-muted-foreground">Carregando agenda...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (isError || sportsError) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center py-10">
+          <div className="text-destructive">Erro ao carregar dados</div>
+          <p className="mt-2 text-muted-foreground">Tente novamente mais tarde</p>
+        </div>
+      </div>
+    );
+  }
 
   // Generate calendar days
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
@@ -99,10 +136,12 @@ const Calendar: React.FC = () => {
             <CalendarIcon className="w-4 h-4" />
             Hoje
           </Button>
-          <Button variant="primary">
-            <Plus className="w-4 h-4" />
-            Novo Evento
-          </Button>
+          <Link to="/events/new">
+            <Button variant="primary">
+              <Plus className="w-4 h-4" />
+              Novo Evento
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -130,8 +169,8 @@ const Calendar: React.FC = () => {
               className="bg-input border border-border rounded-lg px-3 py-2 text-foreground"
             >
               <option value="all">Todas as modalidades</option>
-              {mockSports.map(sport => (
-                <option key={sport.id} value={sport.name}>{sport.name}</option>
+              {sports.map(sport => (
+                <option key={sport.id} value={sport.id.toString()}>{sport.name}</option>
               ))}
             </select>
           </div>

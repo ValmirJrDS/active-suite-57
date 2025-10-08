@@ -2,54 +2,22 @@
 
 export interface Student {
   id: string;
-  // Dados Pessoais
   name: string;
-  birthDate: string; // YYYY-MM-DD
+  birthDate: string;
   cpf: string;
-  photo: string; // URL ou base64
-  address: {
-    street: string;
-    number: string;
-    complement?: string;
-    neighborhood: string;
-    city: string;
-    state: string;
-    zipCode: string;
-  };
-  
-  // Dados do Responsável
-  guardian: {
-    name: string;
-    cpf: string;
-    phone: string;
-    email: string;
-    profession: string;
-  };
-  
-  // Contatos de Emergência
-  emergencyContacts: Array<{
-    name: string;
-    relationship: string;
-    phone: string;
-    email?: string;
-  }>;
-  
-  // Dados de Saúde
-  healthInfo: {
-    allergies?: string;
-    medications?: string;
-    restrictions?: string;
-    doctorContact?: string;
-    healthPlan?: string;
-  };
-  
-  // Dados Acadêmicos
-  enrolledSports: string[]; // IDs das modalidades
-  status: 'active' | 'inactive' | 'pending';
+  photo: string | null;
+  address: any;
+  guardian: any;
+  emergencyContacts: any[];
+  healthInfo: any;
+  enrolledSports: string[];
+  status: 'active' | 'inactive' | 'pending' | 'provisional' | 'effective';
   enrollmentDate: string;
   monthlyFee: number;
   paymentStatus: 'paid' | 'pending' | 'overdue';
-  lastPayment?: string;
+  lastPayment: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Teacher {
@@ -65,10 +33,12 @@ export interface Teacher {
   phone: string;
   email: string;
   address: string;
-  modalitiesIds: string[]; // IDs das modalidades que leciona
   status: 'active' | 'inactive';
   hireDate: string;
   salary: number;
+  createdAt: string;
+  updated_at: string;
+  modalitiesIds?: string[];
 }
 
 export interface Employee {
@@ -108,12 +78,33 @@ export interface Event {
   startTime: string; // HH:mm
   endTime: string; // HH:mm
   type: 'training' | 'match' | 'evaluation' | 'meeting' | 'special' | 'inaugural';
-  sport?: string;
+  sport_id?: string;
   students?: string[]; // IDs dos alunos
   location: string;
-  instructor?: string;
+  instructor_id?: string;
   frequency?: 'daily' | 'weekly' | 'monthly';
   daysOfWeek?: string[]; // Para eventos semanais
+  created_at: string;
+  updated_at: string;
+}
+
+// Interface para o formato de evento que interage com o Supabase
+export interface EventDB {
+  id?: string; // uuid
+  title: string;
+  description?: string | null;
+  date: string; // YYYY-MM-DD
+  start_time: string; // HH:mm
+  end_time: string; // HH:mm
+  event_type?: string; // e.g., 'training', 'match', 'inaugural'
+  modality_id?: string; // uuid
+  students?: string[]; // Array de uuids
+  location: string;
+  teacher_id?: string; // uuid
+  frequency?: string; // e.g., 'daily', 'weekly', 'monthly'
+  days_of_week?: string[]; // Array de strings (dias da semana)
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Sport {
@@ -129,7 +120,8 @@ export interface Sport {
   maxStudents: number;
   currentStudents: number;
   status: 'active' | 'inactive';
-  instructor: string;
+  created_at: string;
+  updated_at: string;
   schedule: Array<{
     day: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
     startTime: string;
@@ -139,11 +131,12 @@ export interface Sport {
 
 export interface InauguralClass {
   id: string;
-  studentId: string;
-  selectedDate: string;
-  selectedModality: string;
+  student_id: string;
+  selected_date: string;
+  selected_modality_id: string;
   status: 'scheduled' | 'completed' | 'cancelled';
-  createdAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DashboardMetrics {

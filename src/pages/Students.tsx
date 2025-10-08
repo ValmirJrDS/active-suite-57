@@ -1,12 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { Users, UserPlus, Search, Download, Eye } from 'lucide-react';
-import { mockStudents } from '@/data/mockStudents';
+import { useStudents } from '@/hooks/useStudents';
+import { useQueryClient } from '@tanstack/react-query';
 import { mockSports } from '@/data/mockSports';
 import { Student } from '@/types';
-import Button from '@/components/shared/Button';
-import FormInput from '@/components/shared/FormInput';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import StatusBadge from '@/components/shared/StatusBadge';
 import Modal from '@/components/shared/Modal';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 
 const Students: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,15 +17,32 @@ const Students: React.FC = () => {
   const [filterSport, setFilterSport] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
+  const { data: students, isLoading, isError } = useStudents();
+
+  // Se houver erro ao carregar os dados
+  if (isError) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="bg-destructive/10 border border-destructive rounded-md p-4">
+          <h2 className="text-lg font-semibold text-destructive">Erro ao carregar alunos</h2>
+          <p className="text-destructive">Ocorreu um erro ao carregar a lista de alunos. Por favor, tente novamente mais tarde.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Filtrar os alunos com base nos critérios de busca e filtros
   const filteredStudents = useMemo(() => {
-    return mockStudents.filter(student => {
+    if (!students) return [];
+    
+    return students.filter(student => {
       const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesSport = filterSport === 'all' || student.enrolledSports.includes(filterSport);
       const matchesStatus = filterStatus === 'all' || student.status === filterStatus;
       
       return matchesSearch && matchesSport && matchesStatus;
     });
-  }, [searchTerm, filterSport, filterStatus]);
+  }, [students, searchTerm, filterSport, filterStatus]);
 
   const getStudentAge = (birthDate: string) => {
     const birth = new Date(birthDate);
@@ -47,14 +67,16 @@ const Students: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Gestão de Alunos</h1>
-          <p className="text-muted-foreground">{filteredStudents.length} alunos encontrados</p>
+          <p className="text-muted-foreground">
+            {isLoading ? 'Carregando...' : `${filteredStudents.length} aluno${filteredStudents.length !== 1 ? 's' : ''} encontrado${filteredStudents.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline">
             <Download className="w-4 h-4" />
             Exportar Lista
           </Button>
-          <Button variant="primary">
+          <Button variant="default">
             <UserPlus className="w-4 h-4" />
             Novo Aluno
           </Button>
@@ -64,12 +86,15 @@ const Students: React.FC = () => {
       {/* Filters and Search */}
       <div className="bg-card border border-border rounded-lg p-6 mb-6 shadow-academy">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <FormInput
-            icon={<Search className="w-4 h-4" />}
-            placeholder="Buscar aluno..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input
+              placeholder="Buscar aluno..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
           
           <select 
             value={filterSport}
@@ -96,45 +121,88 @@ const Students: React.FC = () => {
       </div>
 
       {/* Students Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredStudents.map(student => (
-          <div key={student.id} className="bg-card border border-border rounded-lg p-6 shadow-academy hover:shadow-academy-glow transition-all cursor-pointer"
-               onClick={() => setSelectedStudent(student)}>
-            <div className="flex items-center gap-4 mb-4">
-              <img 
-                src={student.photo} 
-                alt={student.name}
-                className="w-16 h-16 rounded-lg object-cover border-2 border-border"
-              />
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-foreground truncate">{student.name}</h3>
-                <p className="text-sm text-muted-foreground">{getStudentAge(student.birthDate)} anos</p>
-              </div>
-              <StatusBadge status={student.status} size="sm" />
-            </div>
-            
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Modalidades</p>
-                <p className="text-sm text-foreground">{getSportNames(student.enrolledSports)}</p>
-              </div>
-              
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Responsável</p>
-                <p className="text-sm text-foreground">{student.guardian.name}</p>
-              </div>
-              
-              <div className="flex items-center justify-between pt-3 border-t border-border">
-                <div>
-                  <p className="text-xs text-muted-foreground">Mensalidade</p>
-                  <p className="font-semibold text-foreground">R$ {student.monthlyFee.toFixed(2)}</p>
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, index) => (
+            <div key={index} className="bg-card border border-border rounded-lg p-6 shadow-academy">
+              <div className="flex items-center gap-4 mb-4">
+                <Skeleton className="w-16 h-16 rounded-lg" />
+                <div className="flex-1 min-w-0">
+                  <Skeleton className="h-5 w-3/4 mb-2" />
+                  <Skeleton className="h-4 w-1/4" />
                 </div>
-                <StatusBadge status={student.paymentStatus} size="sm" />
+                <Skeleton className="h-6 w-16 rounded-full" />
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <Skeleton className="h-3 w-1/2 mb-1" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+                
+                <div>
+                  <Skeleton className="h-3 w-1/3 mb-1" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+                
+                <div className="flex items-center justify-between pt-3 border-t border-border">
+                  <div>
+                    <Skeleton className="h-3 w-1/3 mb-1" />
+                    <Skeleton className="h-5 w-1/2" />
+                  </div>
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredStudents.map(student => (
+            <div key={student.id} className="bg-card border border-border rounded-lg p-6 shadow-academy hover:shadow-academy-glow transition-all cursor-pointer"
+                 onClick={() => setSelectedStudent(student)}>
+              <div className="flex items-center gap-4 mb-4">
+                {student.photo ? (
+                  <img 
+                    src={student.photo} 
+                    alt={student.name}
+                    className="w-16 h-16 rounded-lg object-cover border-2 border-border"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg object-cover border-2 border-border flex items-center justify-center bg-muted">
+                    <span className="text-muted-foreground text-sm">Sem foto</span>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-foreground truncate">{student.name}</h3>
+                  <p className="text-sm text-muted-foreground">{getStudentAge(student.birthDate)} anos</p>
+                </div>
+                <StatusBadge status={student.status} size="sm" />
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Modalidades</p>
+                  <p className="text-sm text-foreground">{getSportNames(student.enrolledSports)}</p>
+                </div>
+                
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Responsável</p>
+                  <p className="text-sm text-foreground">{student.guardian.name}</p>
+                </div>
+                
+                <div className="flex items-center justify-between pt-3 border-t border-border">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Mensalidade</p>
+                    <p className="font-semibold text-foreground">R$ {(student.monthlyFee || 0).toFixed(2)}</p>
+                  </div>
+                  <StatusBadge status={student.paymentStatus} size="sm" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Student Profile Modal */}
       {selectedStudent && (
@@ -147,11 +215,17 @@ const Students: React.FC = () => {
           <div className="space-y-6">
             {/* Basic Info */}
             <div className="flex items-start gap-6">
-              <img 
-                src={selectedStudent.photo} 
-                alt={selectedStudent.name}
-                className="w-24 h-24 rounded-lg object-cover border-2 border-border"
-              />
+              {selectedStudent.photo ? (
+                <img 
+                  src={selectedStudent.photo} 
+                  alt={selectedStudent.name}
+                  className="w-24 h-24 rounded-lg object-cover border-2 border-border"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-lg object-cover border-2 border-border flex items-center justify-center bg-muted">
+                  <span className="text-muted-foreground text-sm">Sem foto</span>
+                </div>
+              )}
               <div className="flex-1">
                 <h2 className="text-2xl font-bold text-foreground mb-2">{selectedStudent.name}</h2>
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -221,14 +295,14 @@ const Students: React.FC = () => {
                     return sport ? (
                       <div key={sportId} className="flex items-center justify-between">
                         <span className="text-foreground">{sport.name}</span>
-                        <span className="text-sm text-success">R$ {sport.monthlyFee.toFixed(2)}</span>
+                        <span className="text-sm text-success">R$ {(sport.monthlyFee || 0).toFixed(2)}</span>
                       </div>
                     ) : null;
                   })}
                   <div className="pt-2 border-t border-border">
                     <div className="flex items-center justify-between font-semibold">
                       <span className="text-foreground">Total Mensal:</span>
-                      <span className="text-primary">R$ {selectedStudent.monthlyFee.toFixed(2)}</span>
+                      <span className="text-primary">R$ {(selectedStudent.monthlyFee || 0).toFixed(2)}</span>
                     </div>
                   </div>
                 </div>

@@ -7,9 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar, Clock, MapPin, Users, Trophy, Plus } from 'lucide-react';
-import { mockSports } from '@/data/mockSports';
-import { mockTeachers } from '@/data/mockTeachers';
-import { mockEvents } from '@/data/mockEvents';
+import { useSports } from '@/hooks/useSports';
+import { useTeachers } from '@/hooks/useTeachers';
+import { useCreateEvent } from '@/hooks/useEvents';
 import { Event } from '@/types';
 import { toast } from 'sonner';
 
@@ -24,6 +24,10 @@ const daysOfWeek = [
 ];
 
 const NewEvent: React.FC = () => {
+  const { data: sports = [], isLoading: sportsLoading, isError: sportsError } = useSports();
+  const { data: teachers = [], isLoading: teachersLoading, isError: teachersError } = useTeachers();
+  const createEventMutation = useCreateEvent();
+  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -38,9 +42,37 @@ const NewEvent: React.FC = () => {
     daysOfWeek: [] as string[]
   });
 
+  if (sportsLoading || teachersLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center py-10">
+          <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
+          <p className="mt-3 text-muted-foreground">Carregando formulário...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (sportsError || teachersError) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center py-10">
+          <div className="text-destructive">Erro ao carregar dados</div>
+          <p className="mt-2 text-muted-foreground">Tente novamente mais tarde</p>
+        </div>
+      </div>
+    );
+  }
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Correção específica para campos de tempo
+  const handleTimeChange = (field: 'startTime' | 'endTime') => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = e.target;
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleSelectChange = (name: string, value: string) => {
@@ -117,7 +149,7 @@ const NewEvent: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title || !formData.date || !formData.startTime || !formData.endTime) {
+    if (!formData.title || !formData.date) {
       toast.error('Preencha todos os campos obrigatórios!');
       return;
     }
@@ -127,43 +159,93 @@ const NewEvent: React.FC = () => {
       return;
     }
 
-    const newEvents = generateRecurringEvents();
-    
-    // Simular salvamento
-    newEvents.forEach(event => mockEvents.push(event));
-    
-    const message = newEvents.length === 1 
-      ? 'Evento criado com sucesso!' 
-      : `${newEvents.length} eventos criados com sucesso!`;
-    
-    toast.success(message);
-    
-    // Reset form
-    setFormData({
-      title: '',
-      description: '',
-      date: '',
-      startTime: '',
-      endTime: '',
-      type: 'training',
-      sport: '',
-      location: '',
-      instructor: '',
-      frequency: '',
-      daysOfWeek: []
+    // Regra de negócio para eventos do tipo "Aula Inaugural"
+    if (formData.type === 'inaugural') {
+      // Validar que é um evento único
+      if (formData.frequency !== 'daily') {
+        toast.error('Aulas inaugurais devem ser eventos únicos (não recorrentes).');
+        return;
+      }
+      
+      // Validar que o título contém o nome da modalidade
+      const selectedSport = sports.find(sport => sport.id === formData.sport);
+      if (selectedSport && !formData.title.toLowerCase().includes(selectedSport.name.toLowerCase())) {
+        toast.error(`O título da aula inaugural deve conter o nome da modalidade: ${selectedSport.name}`);
+        return;
+      }
+    }
+
+    // Validar que os campos obrigatórios não estejam vazios
+    if (!formData.location) {
+        toast.error('Preencha todos os campos obrigatórios: local.');
+        return;
+    }
+
+    // Validação específica para campos de hora com mensagem mais clara
+    if (!formData.startTime || !formData.endTime) {
+        toast.error('Por favor, preencha a hora de início e de término do evento.');
+        return;
+    }
+
+    // Validar formato dos horários (HH:mm)
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(formData.startTime) || !timeRegex.test(formData.endTime)) {
+        toast.error('Por favor, informe horários válidos no formato HH:mm.');
+        return;
+    }
+
+    // Criar um evento com base nos dados do formulário no formato UIEvent
+    const eventToCreate = {
+      title: formData.title,
+      description: formData.description || '',
+      date: formData.date, // YYYY-MM-DD
+      startTime: formData.startTime, // HH:mm
+      endTime: formData.endTime, // HH:mm
+      location: formData.location,
+      sport_id: formData.sport || undefined, // UUID como string ou undefined
+      instructor_id: formData.instructor || undefined, // UUID como string ou undefined
+      type: formData.type,
+      students: [],
+      created_at: '',
+      updated_at: ''
+    };
+
+    // Debug: verificar se os campos de tempo estão sendo capturados corretamente
+    console.log('FormData antes do envio:', formData);
+    console.log('EventToCreate:', eventToCreate);
+
+    createEventMutation.mutate(eventToCreate, {
+      onSuccess: () => {
+        toast.success('Evento criado com sucesso!');
+        
+        // Reset form
+        setFormData({
+          title: '',
+          description: '',
+          date: '',
+          startTime: '',
+          endTime: '',
+          type: 'training',
+          sport: '',
+          location: '',
+          instructor: '',
+          frequency: '',
+          daysOfWeek: []
+        });
+      },
+      onError: (error) => {
+        console.error('Error creating event:', error);
+        toast.error('Erro ao criar evento. Por favor, tente novamente.');
+      }
     });
   };
 
   const getTeachersBySport = () => {
-    if (!formData.sport) return mockTeachers;
+    if (!formData.sport) return teachers;
     
-    const sport = mockSports.find(s => s.id === formData.sport);
-    if (!sport) return mockTeachers;
-    
-    return mockTeachers.filter(teacher => 
-      teacher.modalitiesIds.includes(formData.sport) || 
-      teacher.fullName === sport.instructor ||
-      teacher.nickname === sport.instructor
+    // Filtrar professores que tem a modalidade selecionada
+    return teachers.filter(teacher => 
+      teacher.modalities_ids?.includes(parseInt(formData.sport))
     );
   };
 
@@ -245,7 +327,7 @@ const NewEvent: React.FC = () => {
                   name="startTime"
                   type="time"
                   value={formData.startTime}
-                  onChange={handleInputChange}
+                  onChange={handleTimeChange('startTime')}
                   required
                 />
               </div>
@@ -256,7 +338,7 @@ const NewEvent: React.FC = () => {
                   name="endTime"
                   type="time"
                   value={formData.endTime}
-                  onChange={handleInputChange}
+                  onChange={handleTimeChange('endTime')}
                   required
                 />
               </div>
@@ -270,8 +352,8 @@ const NewEvent: React.FC = () => {
                     <SelectValue placeholder="Selecione uma modalidade" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockSports.map(sport => (
-                      <SelectItem key={sport.id} value={sport.id}>
+                    {sports.map(sport => (
+                      <SelectItem key={sport.id} value={sport.id.toString()}>
                         {sport.name}
                       </SelectItem>
                     ))}
@@ -286,8 +368,8 @@ const NewEvent: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {getTeachersBySport().map(teacher => (
-                      <SelectItem key={teacher.id} value={teacher.nickname}>
-                        {teacher.fullName} ({teacher.nickname})
+                      <SelectItem key={teacher.id} value={teacher.id.toString()}>
+                        {teacher.full_name} ({teacher.nickname})
                       </SelectItem>
                     ))}
                   </SelectContent>

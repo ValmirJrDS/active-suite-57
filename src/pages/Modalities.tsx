@@ -6,12 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Pencil, Trash2, Trophy, Clock, Users, DollarSign } from 'lucide-react';
-import { mockSports } from '@/data/mockSports';
 import { Sport } from '@/types';
 import { toast } from 'sonner';
+import { useSports, useCreateSport, useUpdateSport, useDeleteSport } from '@/hooks/useSports';
+import { Loader2 } from 'lucide-react';
 
 const daysOfWeek = [
   { value: 'monday', label: 'Segunda' },
@@ -24,18 +24,21 @@ const daysOfWeek = [
 ];
 
 const Modalities: React.FC = () => {
-  const [sports, setSports] = useState(mockSports);
+  const { data: sports = [], isLoading, isError, refetch } = useSports();
+  const createSportMutation = useCreateSport();
+  const updateSportMutation = useUpdateSport();
+  const deleteSportMutation = useDeleteSport();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSport, setEditingSport] = useState<Sport | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    ageMin: '',
-    ageMax: '',
-    monthlyFee: '',
-    weeklyHours: '',
-    maxStudents: '',
-    instructor: '',
+    ageMin: '0',
+    ageMax: '0',
+    monthlyFee: '0',
+    weeklyHours: '0',
+    maxStudents: '0',
     schedule: [{ day: 'monday', startTime: '', endTime: '' }]
   });
 
@@ -67,23 +70,38 @@ const Modalities: React.FC = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const sportData: Sport = {
-      id: editingSport?.id || Date.now().toString(),
+    // Validação dos campos obrigatórios
+    if (!formData.name || !formData.description) {
+      toast.error('Nome e descrição são campos obrigatórios!');
+      return;
+    }
+    
+    // Verificar campos numéricos obrigatórios
+    const ageMin = parseInt(formData.ageMin);
+    const ageMax = parseInt(formData.ageMax);
+    const weeklyHours = parseInt(formData.weeklyHours);
+    const maxStudents = parseInt(formData.maxStudents);
+    const monthlyFee = parseFloat(formData.monthlyFee);
+    
+    if (isNaN(ageMin) || isNaN(ageMax) || isNaN(weeklyHours) || isNaN(maxStudents) || isNaN(monthlyFee)) {
+      toast.error('Por favor, preencha todos os campos numéricos corretamente!');
+      return;
+    }
+    
+    const sportData: Omit<Sport, 'id' | 'currentStudents' | 'created_at' | 'updated_at'> = {
       name: formData.name,
       description: formData.description,
       ageRange: {
-        min: parseInt(formData.ageMin),
-        max: parseInt(formData.ageMax)
+        min: ageMin,
+        max: ageMax
       },
-      monthlyFee: parseFloat(formData.monthlyFee),
-      weeklyHours: parseInt(formData.weeklyHours),
-      maxStudents: parseInt(formData.maxStudents),
-      currentStudents: editingSport?.currentStudents || 0,
+      monthlyFee: monthlyFee,
+      weeklyHours: weeklyHours,
+      maxStudents: maxStudents,
       status: 'active',
-      instructor: formData.instructor,
       schedule: formData.schedule.filter(s => s.startTime && s.endTime).map(s => ({
         day: s.day as any,
         startTime: s.startTime,
@@ -91,27 +109,30 @@ const Modalities: React.FC = () => {
       }))
     };
 
-    if (editingSport) {
-      setSports(prev => prev.map(s => s.id === editingSport.id ? sportData : s));
-      toast.success('Modalidade atualizada com sucesso!');
-    } else {
-      setSports(prev => [...prev, sportData]);
-      toast.success('Modalidade cadastrada com sucesso!');
+    try {
+      if (editingSport) {
+        await updateSportMutation.mutateAsync({ id: editingSport.id, data: sportData });
+        toast.success('Modalidade atualizada com sucesso!');
+      } else {
+        await createSportMutation.mutateAsync(sportData);
+        toast.success('Modalidade cadastrada com sucesso!');
+      }
+      resetForm();
+    } catch (error) {
+      console.error('Error saving sport:', error);
+      toast.error('Erro ao salvar modalidade: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
-
-    resetForm();
   };
 
   const resetForm = () => {
     setFormData({
       name: '',
       description: '',
-      ageMin: '',
-      ageMax: '',
-      monthlyFee: '',
-      weeklyHours: '',
-      maxStudents: '',
-      instructor: '',
+      ageMin: '0',
+      ageMax: '0',
+      monthlyFee: '0',
+      weeklyHours: '0',
+      maxStudents: '0',
       schedule: [{ day: 'monday', startTime: '', endTime: '' }]
     });
     setEditingSport(null);
@@ -123,12 +144,11 @@ const Modalities: React.FC = () => {
     setFormData({
       name: sport.name,
       description: sport.description,
-      ageMin: sport.ageRange.min.toString(),
-      ageMax: sport.ageRange.max.toString(),
-      monthlyFee: sport.monthlyFee.toString(),
-      weeklyHours: sport.weeklyHours.toString(),
-      maxStudents: sport.maxStudents.toString(),
-      instructor: sport.instructor,
+      ageMin: sport.ageRange?.min?.toString() || '0',
+      ageMax: sport.ageRange?.max?.toString() || '0',
+      monthlyFee: sport.monthlyFee?.toString() || '0',
+      weeklyHours: sport.weeklyHours?.toString() || '0',
+      maxStudents: sport.maxStudents?.toString() || '0',
       schedule: sport.schedule.map(s => ({
         day: s.day,
         startTime: s.startTime,
@@ -138,9 +158,16 @@ const Modalities: React.FC = () => {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setSports(prev => prev.filter(s => s.id !== id));
-    toast.success('Modalidade removida com sucesso!');
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir esta modalidade? Esta ação não pode ser desfeita.')) {
+      try {
+        await deleteSportMutation.mutateAsync(id);
+        toast.success('Modalidade removida com sucesso!');
+      } catch (error) {
+        console.error('Error deleting sport:', error);
+        toast.error('Erro ao remover modalidade: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      }
+    }
   };
 
   return (
@@ -152,9 +179,18 @@ const Modalities: React.FC = () => {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => resetForm()}>
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Modalidade
+            <Button onClick={() => resetForm()} disabled={createSportMutation.isPending || updateSportMutation.isPending}>
+              {createSportMutation.isPending || updateSportMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {editingSport ? 'Atualizando...' : 'Cadastrando...'}
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova Modalidade
+                </>
+              )}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -165,27 +201,15 @@ const Modalities: React.FC = () => {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome da Modalidade</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="instructor">Instrutor/Professor</Label>
-                  <Input
-                    id="instructor"
-                    name="instructor"
-                    value={formData.instructor}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome da Modalidade</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  required
+                />
               </div>
 
               <div className="space-y-2">
@@ -312,11 +336,26 @@ const Modalities: React.FC = () => {
               </div>
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={resetForm}>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={resetForm}
+                  disabled={createSportMutation.isPending || updateSportMutation.isPending}
+                >
                   Cancelar
                 </Button>
-                <Button type="submit">
-                  {editingSport ? 'Atualizar' : 'Cadastrar'}
+                <Button 
+                  type="submit" 
+                  disabled={createSportMutation.isPending || updateSportMutation.isPending}
+                >
+                  {createSportMutation.isPending || updateSportMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {editingSport ? 'Atualizando...' : 'Cadastrando...'}
+                    </>
+                  ) : (
+                    editingSport ? 'Atualizar' : 'Cadastrar'
+                  )}
                 </Button>
               </DialogFooter>
             </form>
@@ -324,65 +363,90 @@ const Modalities: React.FC = () => {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {sports.map(sport => (
-          <Card key={sport.id} className="hover:shadow-academy-glow transition-all">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-primary" />
-                {sport.name}
-              </CardTitle>
-              <CardDescription>{sport.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-muted-foreground" />
-                  <span>{sport.currentStudents}/{sport.maxStudents} alunos</span>
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="ml-2">Carregando modalidades...</span>
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center justify-center h-64 text-center">
+          <p className="text-destructive text-lg mb-2">Erro ao carregar as modalidades</p>
+          <p className="text-muted-foreground mb-4">Verifique sua conexão e tente novamente</p>
+          <Button onClick={() => refetch()}>Tentar novamente</Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {sports.map(sport => (
+            <Card key={sport.id} className="hover:shadow-academy-glow transition-all">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-primary" />
+                  {sport.name}
+                </CardTitle>
+                <CardDescription>{sport.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-muted-foreground" />
+                    <span>{sport.currentStudents || 0}/{sport.maxStudents || 0} alunos</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span>{sport.weeklyHours || 0}h/semana</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-muted-foreground" />
+                    <span>R$ {(sport.monthlyFee || 0).toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Idade: </span>
+                    <span>{sport.ageRange?.min || 0}-{sport.ageRange?.max || 0} anos</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <span>{sport.weeklyHours}h/semana</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-muted-foreground" />
-                  <span>R$ {sport.monthlyFee.toFixed(2)}</span>
-                </div>
+                
+
+
                 <div>
-                  <span className="text-muted-foreground">Idade: </span>
-                  <span>{sport.ageRange.min}-{sport.ageRange.max} anos</span>
+                  <p className="text-sm font-medium mb-2">Horários:</p>
+                  <div className="space-y-1">
+                    {sport.schedule.map((schedule, index) => (
+                      <div key={index} className="text-xs text-muted-foreground">
+                        {daysOfWeek.find(d => d.value === schedule.day)?.label}: {schedule.startTime} - {schedule.endTime}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              
-              <div>
-                <p className="text-sm font-medium mb-2">Professor:</p>
-                <Badge variant="secondary">{sport.instructor}</Badge>
-              </div>
 
-              <div>
-                <p className="text-sm font-medium mb-2">Horários:</p>
-                <div className="space-y-1">
-                  {sport.schedule.map((schedule, index) => (
-                    <div key={index} className="text-xs text-muted-foreground">
-                      {daysOfWeek.find(d => d.value === schedule.day)?.label}: {schedule.startTime} - {schedule.endTime}
-                    </div>
-                  ))}
+                <div className="flex gap-2 pt-4">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => handleEdit(sport)} 
+                    className="flex-1"
+                    disabled={deleteSportMutation.isPending}
+                  >
+                    <Pencil className="w-4 h-4 mr-2" />
+                    Editar
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => handleDelete(sport.id)}
+                    disabled={deleteSportMutation.isPending}
+                  >
+                    {deleteSportMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </Button>
                 </div>
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <Button size="sm" variant="outline" onClick={() => handleEdit(sport)} className="flex-1">
-                  <Pencil className="w-4 h-4 mr-2" />
-                  Editar
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => handleDelete(sport.id)}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

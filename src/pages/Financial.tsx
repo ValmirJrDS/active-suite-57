@@ -208,7 +208,7 @@ const Financial: React.FC = () => {
                   </td>
                   <td className="p-4">
                     <span className="font-mono text-foreground font-semibold">
-                      R$ {payment.amount.toFixed(2)}
+                      R$ {(payment.amount || 0).toFixed(2)}
                     </span>
                   </td>
                   <td className="p-4 text-muted-foreground">

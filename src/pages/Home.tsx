@@ -109,7 +109,7 @@ const Home: React.FC = () => {
                   <p className="text-sm text-muted-foreground">{payment.sport}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-mono text-card-foreground">R$ {payment.amount.toFixed(2)}</p>
+                  <p className="font-mono text-card-foreground">R$ {(payment.amount || 0).toFixed(2)}</p>
                   <StatusBadge status={payment.status} size="sm" />
                 </div>
               </div>

@@ -349,7 +349,7 @@ const Enrollment: React.FC = () => {
                 }}>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-semibold text-foreground">{sport.name}</h3>
-                    <span className="text-lg font-bold text-primary">R$ {sport.monthlyFee.toFixed(2)}</span>
+                    <span className="text-lg font-bold text-primary">R$ {(sport.monthlyFee || 0).toFixed(2)}</span>
                   </div>
                   <p className="text-sm text-muted-foreground mb-2">{sport.description}</p>
                   <div className="text-xs text-muted-foreground">
@@ -369,7 +369,7 @@ const Enrollment: React.FC = () => {
                     return sport ? (
                       <div key={sportId} className="flex justify-between text-sm">
                         <span className="text-foreground">{sport.name}</span>
-                        <span className="text-foreground">R$ {sport.monthlyFee.toFixed(2)}</span>
+                        <span className="text-foreground">R$ {(sport.monthlyFee || 0).toFixed(2)}</span>
                       </div>
                     ) : null;
                   })}
@@ -417,7 +417,7 @@ const Enrollment: React.FC = () => {
                   return sport ? (
                     <div key={sportId} className="flex justify-between">
                       <span className="text-foreground">{sport.name}</span>
-                      <span className="text-foreground">R$ {sport.monthlyFee.toFixed(2)}</span>
+                      <span className="text-foreground">R$ {(sport.monthlyFee || 0).toFixed(2)}</span>
                     </div>
                   ) : null;
                 })}

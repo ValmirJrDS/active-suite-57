@@ -6,16 +6,65 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Users, MapPin, Heart, Trophy } from 'lucide-react';
+import { User, Users, MapPin, Heart, Trophy, Loader2 } from 'lucide-react';
 import { mockSports } from '@/data/mockSports';
-import { mockStudents } from '@/data/mockStudents';
 import { Student } from '@/types';
 import { toast } from 'sonner';
 import PhotoUpload from '@/components/shared/PhotoUpload';
+import { useCreateStudent, useUpdateStudent } from '@/hooks/useStudents';
+import { useNavigate, useParams } from 'react-router-dom';
+import supabase from '@/lib/supabaseClient';
+
+type FormData = {
+  // Dados Pessoais
+  name: string;
+  birthDate: string;
+  cpf: string;
+  photo?: string;
+  address: {
+    street: string;
+    number: string;
+    complement: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
+  // Dados do Responsável
+  guardian: {
+    name: string;
+    cpf: string;
+    phone: string;
+    email: string;
+    profession: string;
+  };
+  // Contatos de Emergência
+  emergencyContacts: Array<{
+    name: string;
+    relationship: string;
+    phone: string;
+    email: string;
+  }>;
+  // Dados de Saúde
+  healthInfo: {
+    allergies: string;
+    medications: string;
+    restrictions: string;
+    doctorContact: string;
+    healthPlan: string;
+  };
+  // Modalidades
+  enrolledSports: string[];
+  monthlyFee: number;
+};
 
 const NewStudent: React.FC = () => {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>(); // Para edição de aluno existente
+  const isEditing = !!id;
+  
   const [currentTab, setCurrentTab] = useState('personal');
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     // Dados Pessoais
     name: '',
     birthDate: '',
@@ -54,6 +103,14 @@ const NewStudent: React.FC = () => {
     enrolledSports: [] as string[],
     monthlyFee: 0
   });
+  
+  // Estados para upload de foto
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Hooks de mutation para criar/atualizar aluno
+  const { mutate: createStudent, isPending: isCreating } = useCreateStudent();
+  const { mutate: updateStudent, isPending: isUpdating } = useUpdateStudent();
 
   const handleInputChange = (section: string, field: string, value: string) => {
     setFormData(prev => ({
@@ -134,76 +191,159 @@ const NewStudent: React.FC = () => {
     );
   };
 
-  const handleSubmit = () => {
+  // Função para fazer upload da foto para o Supabase Storage
+  const uploadPhotoToStorage = async (file: File, studentId: string): Promise<string | null> => {
+    if (!file) return null;
+    
+    try {
+      setIsUploading(true);
+      setUploadProgress(0);
+      
+      const fileName = `students/${studentId}/${Date.now()}_${file.name}`;
+      
+      const { data, error } = await supabase
+        .storage
+        .from('student-photos')
+        .upload(fileName, file, { 
+          cacheControl: '3600',
+          upsert: true 
+        });
+      
+      if (error) throw error;
+      
+      // Obter URL pública
+      const { data: { publicUrl } } = supabase
+        .storage
+        .from('student-photos')
+        .getPublicUrl(fileName);
+      
+      setUploadProgress(100);
+      return publicUrl;
+    } catch (error: any) {
+      console.error('Erro no upload da foto:', error);
+      toast.error('Erro ao fazer upload da foto: ' + error.message);
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!formData.name || !formData.birthDate || !formData.cpf) {
       toast.error('Preencha todos os campos obrigatórios!');
       return;
     }
 
-    const newStudent: Student = {
-      id: Date.now().toString(),
-      name: formData.name,
-      birthDate: formData.birthDate,
-      cpf: formData.cpf,
-      photo: formData.photo || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
-      address: formData.address,
-      guardian: formData.guardian,
-      emergencyContacts: formData.emergencyContacts.filter(c => c.name && c.phone),
-      healthInfo: formData.healthInfo,
-      enrolledSports: formData.enrolledSports,
-      status: 'active',
-      enrollmentDate: new Date().toISOString().split('T')[0],
-      monthlyFee: formData.monthlyFee,
-      paymentStatus: 'pending'
-    };
+    // Se o usuário selecionou uma foto, fazer upload primeiro
+    let photoUrl = formData.photo;
+    if (formData.photo && formData.photo.startsWith('data:image')) {
+      // Isso indica que é um arquivo de imagem (data URL)
+      const file = await dataURLToFile(formData.photo, 'photo.jpg');
+      if (file) {
+        // Fazer upload da foto ANTES de criar o aluno
+        toast.info('Fazendo upload da foto...');
+        const uploadedPhotoUrl = await uploadPhotoToStorage(file, crypto.randomUUID()); // Usar ID temporário para o upload
+        
+        // Criar aluno com a URL da foto
+        const studentToCreate = {
+          ...formData,
+          photo: uploadedPhotoUrl || null, // Usar a URL da foto já carregada
+          address: formData.address,
+          guardian: formData.guardian,
+          emergencyContacts: formData.emergencyContacts.filter(c => c.name && c.phone),
+          healthInfo: formData.healthInfo,
+          enrolledSports: formData.enrolledSports,
+          status: 'active',
+          enrollmentDate: new Date().toISOString().split('T')[0],
+          monthlyFee: formData.monthlyFee,
+          paymentStatus: 'pending'
+        };
+        
+        createStudent(studentToCreate as Omit<Student, 'id' | 'created_at' | 'updated_at'>, {
+          onSuccess: () => {
+            toast.success('Aluno cadastrado com sucesso!');
+            navigate('/students'); // Voltar para a lista de alunos
+          },
+          onError: (error) => {
+            console.error('Erro ao criar aluno:', error);
+            toast.error('Erro ao cadastrar aluno: ' + error.message);
+          }
+        });
+      } else {
+        // Mesmo sem foto, criar o aluno
+        const studentToCreate = {
+          ...formData,
+          photo: null,
+          address: formData.address,
+          guardian: formData.guardian,
+          emergencyContacts: formData.emergencyContacts.filter(c => c.name && c.phone),
+          healthInfo: formData.healthInfo,
+          enrolledSports: formData.enrolledSports,
+          status: 'active',
+          enrollmentDate: new Date().toISOString().split('T')[0],
+          monthlyFee: formData.monthlyFee,
+          paymentStatus: 'pending'
+        };
+        
+        createStudent(studentToCreate as Omit<Student, 'id' | 'created_at' | 'updated_at'>, {
+          onSuccess: () => {
+            toast.success('Aluno cadastrado com sucesso!');
+            navigate('/students'); // Voltar para a lista de alunos
+          },
+          onError: (error) => {
+            toast.error('Erro ao cadastrar aluno: ' + error.message);
+          }
+        });
+      }
+    } else {
+      // O campo photo já é uma URL, não precisa fazer upload
+      const studentToCreate = {
+        ...formData,
+        photo: photoUrl || null,
+        address: formData.address,
+        guardian: formData.guardian,
+        emergencyContacts: formData.emergencyContacts.filter(c => c.name && c.phone),
+        healthInfo: formData.healthInfo,
+        enrolledSports: formData.enrolledSports,
+        status: 'active',
+        enrollmentDate: new Date().toISOString().split('T')[0],
+        monthlyFee: formData.monthlyFee,
+        paymentStatus: 'pending'
+      };
+      
+      createStudent(studentToCreate as Omit<Student, 'id' | 'created_at' | 'updated_at'>, {
+        onSuccess: () => {
+          toast.success('Aluno cadastrado com sucesso!');
+          navigate('/students'); // Voltar para a lista de alunos
+        },
+        onError: (error) => {
+          toast.error('Erro ao cadastrar aluno: ' + error.message);
+        }
+      });
+    }
+  };
 
-    // Simular salvamento
-    mockStudents.push(newStudent);
-    toast.success('Aluno cadastrado com sucesso!');
-    
-    // Reset form
-    setFormData({
-      name: '',
-      birthDate: '',
-      cpf: '',
-      photo: '',
-      address: {
-        street: '',
-        number: '',
-        complement: '',
-        neighborhood: '',
-        city: '',
-        state: '',
-        zipCode: ''
-      },
-      guardian: {
-        name: '',
-        cpf: '',
-        phone: '',
-        email: '',
-        profession: ''
-      },
-      emergencyContacts: [
-        { name: '', relationship: '', phone: '', email: '' }
-      ],
-      healthInfo: {
-        allergies: '',
-        medications: '',
-        restrictions: '',
-        doctorContact: '',
-        healthPlan: ''
-      },
-      enrolledSports: [],
-      monthlyFee: 0
-    });
-    setCurrentTab('personal');
+  // Função auxiliar para converter data URL para arquivo
+  const dataURLToFile = async (dataUrl: string, fileName: string): Promise<File | null> => {
+    try {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      return new File([blob], fileName, { type: 'image/jpeg' });
+    } catch (error) {
+      console.error('Erro ao converter data URL para arquivo:', error);
+      return null;
+    }
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Cadastro de Novo Aluno</h1>
-        <p className="text-muted-foreground">Preencha todos os dados do novo aluno</p>
+        <h1 className="text-3xl font-bold text-foreground">
+          {isEditing ? 'Editar Aluno' : 'Cadastro de Novo Aluno'}
+        </h1>
+        <p className="text-muted-foreground">
+          {isEditing ? 'Edite os dados do aluno abaixo' : 'Preencha todos os dados do novo aluno'}
+        </p>
       </div>
 
       <Card>
@@ -274,7 +414,19 @@ const NewStudent: React.FC = () => {
                     value={formData.photo}
                     onChange={(photo) => handleDirectInputChange('photo', photo)}
                     label="Foto do Aluno"
+                    disabled={isUploading}
                   />
+                  {isUploading && (
+                    <div className="mt-2">
+                      <div className="w-full bg-gray-200 rounded-full h-2.5">
+                        <div 
+                          className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-in-out" 
+                          style={{ width: `${uploadProgress}%` }}
+                        ></div>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">Fazendo upload da foto... {uploadProgress}%</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </TabsContent>
@@ -566,7 +718,7 @@ const NewStudent: React.FC = () => {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="font-semibold text-primary">R$ {sport.monthlyFee.toFixed(2)}</p>
+                            <p className="font-semibold text-primary">R$ {(sport.monthlyFee || 0).toFixed(2)}</p>
                             <p className="text-xs text-muted-foreground">{sport.weeklyHours}h/semana</p>
                           </div>
                         </div>
@@ -602,7 +754,7 @@ const NewStudent: React.FC = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-semibold text-primary">R$ {sport.monthlyFee.toFixed(2)}</p>
+                        <p className="font-semibold text-primary">R$ {(sport.monthlyFee || 0).toFixed(2)}</p>
                         <p className="text-xs text-muted-foreground">{sport.weeklyHours}h/semana</p>
                       </div>
                     </div>
@@ -618,13 +770,13 @@ const NewStudent: React.FC = () => {
                         return sport ? (
                           <div key={sportId} className="flex justify-between text-sm">
                             <span>{sport.name}</span>
-                            <span>R$ {sport.monthlyFee.toFixed(2)}</span>
+                            <span>R$ {(sport.monthlyFee || 0).toFixed(2)}</span>
                           </div>
                         ) : null;
                       })}
                       <div className="border-t border-success/20 pt-2 flex justify-between font-semibold">
                         <span>Total Mensal:</span>
-                        <span className="text-success">R$ {formData.monthlyFee.toFixed(2)}</span>
+                        <span className="text-success">R$ {(formData.monthlyFee || 0).toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -650,9 +802,16 @@ const NewStudent: React.FC = () => {
             {currentTab === 'sports' ? (
               <Button
                 onClick={handleSubmit}
-                disabled={!formData.name || !formData.birthDate || !formData.cpf || formData.enrolledSports.length === 0}
+                disabled={!formData.name || !formData.birthDate || !formData.cpf || formData.enrolledSports.length === 0 || isCreating || isUpdating || isUploading}
               >
-                Finalizar Cadastro
+                {(isCreating || isUpdating || isUploading) ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isCreating || isUpdating ? 'Salvando...' : 'Fazendo upload...'}
+                  </>
+                ) : (
+                  'Finalizar Cadastro'
+                )}
               </Button>
             ) : (
               <Button

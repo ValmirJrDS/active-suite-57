@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, X, User } from 'lucide-react';
+import { Upload, X, User, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PhotoUploadProps {
@@ -7,24 +7,33 @@ interface PhotoUploadProps {
   onChange: (photoUrl: string) => void;
   className?: string;
   label?: string;
+  disabled?: boolean;
 }
 
 const PhotoUpload: React.FC<PhotoUploadProps> = ({ 
   value, 
   onChange, 
   className, 
-  label = "Foto" 
+  label = "Foto",
+  disabled = false
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleFileSelect = (file: File) => {
+  const handleFileSelect = async (file: File) => {
     if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        onChange(result);
-      };
-      reader.readAsDataURL(file);
+      setIsProcessing(true);
+      try {
+        // Converter o arquivo para Data URL (pode ser usado para pré-visualização)
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          onChange(result);
+        };
+        reader.readAsDataURL(file);
+      } finally {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -32,12 +41,12 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file) handleFileSelect(file);
+    if (file && !disabled) handleFileSelect(file);
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) handleFileSelect(file);
+    if (file && !disabled) handleFileSelect(file);
   };
 
   return (
@@ -54,15 +63,24 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
             "border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-all",
             "hover:border-primary hover:bg-primary/5",
             isDragging ? "border-primary bg-primary/10" : "border-border",
-            value ? "border-solid border-primary" : ""
+            value ? "border-solid border-primary" : "",
+            disabled ? "opacity-50 cursor-not-allowed" : ""
           )}
           onDrop={handleDrop}
-          onDragOver={(e) => e.preventDefault()}
-          onDragEnter={() => setIsDragging(true)}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!disabled) setIsDragging(true);
+          }}
+          onDragEnter={() => {!disabled && setIsDragging(true);}}
           onDragLeave={() => setIsDragging(false)}
-          onClick={() => document.getElementById('photo-upload')?.click()}
+          onClick={() => {!disabled && document.getElementById('photo-upload')?.click();}}
         >
-          {value ? (
+          {isProcessing ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+              <p className="text-sm text-foreground">Processando imagem...</p>
+            </div>
+          ) : value ? (
             <div className="relative inline-block">
               <img
                 src={value}
@@ -73,9 +91,13 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onChange('');
+                  !disabled && onChange('');
                 }}
-                className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/80"
+                disabled={disabled}
+                className={cn(
+                  "absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/80",
+                  disabled ? "cursor-not-allowed opacity-50" : ""
+                )}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -106,6 +128,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
           accept="image/*"
           onChange={handleFileInput}
           className="hidden"
+          disabled={disabled}
         />
       </div>
     </div>

@@ -15,10 +15,14 @@ import { Student, InauguralClass } from '@/types';
 import { toast } from 'sonner';
 import PhotoUpload from '@/components/shared/PhotoUpload';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import supabase from '@/lib/supabaseClient';
 
 const InauguralClassPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user, updateProfile } = useAuth();
   const [currentTab, setCurrentTab] = useState('personal');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     // Dados Pessoais
     name: '',
@@ -148,45 +152,84 @@ const InauguralClassPage: React.FC = () => {
     }
   }, [formData.birthDate]);
 
-  const handleConfirmClass = () => {
+  const handleConfirmClass = async () => {
     if (!formData.name || !formData.birthDate || !formData.selectedDate || !formData.selectedModality) {
       toast.error('Preencha todos os campos obrigatórios!');
       return;
     }
 
-    // Criar registro da aula inaugural
-    const inauguralClass: InauguralClass = {
-      id: Date.now().toString(),
-      studentId: 'temp-' + Date.now(),
-      selectedDate: formData.selectedDate,
-      selectedModality: formData.selectedModality,
-      status: 'scheduled',
-      createdAt: new Date().toISOString()
-    };
+    if (!user?.email) {
+      toast.error('Usuário não encontrado. Faça login novamente.');
+      return;
+    }
 
-    // Criar evento para a aula inaugural
-    const modality = mockSports.find(s => s.id === formData.selectedModality);
-    const inauguralEvent = {
-      id: `inaugural-${Date.now()}`,
-      title: `Aula Inaugural - ${formData.name}`,
-      description: `Aula inaugural para ${formData.name} na modalidade ${modality?.name}`,
-      date: formData.selectedDate,
-      startTime: '10:00',
-      endTime: '11:00',
-      type: 'inaugural' as const,
-      sport: modality?.name,
-      students: [inauguralClass.studentId],
-      location: 'Campo Principal',
-      instructor: 'Equipe Técnica'
-    };
+    setIsSubmitting(true);
 
-    // Simular salvamento
-    mockEvents.push(inauguralEvent);
-    
-    toast.success('Aula inaugural confirmada com sucesso!');
-    
-    // Reset form
-    resetForm();
+    try {
+      // 1. Criar o aluno na tabela students com status provisional
+      const studentData = {
+        name: formData.name,
+        birthDate: formData.birthDate,
+        cpf: formData.cpf || `temp-${Date.now()}`, // CPF temporário se não fornecido
+        photo: formData.photo || null,
+        address: formData.address,
+        guardian: {
+          ...formData.guardian,
+          email: user.email // Vincular com o email do responsável logado
+        },
+        emergencyContacts: formData.emergencyContacts,
+        healthInfo: formData.healthInfo,
+        enrolledSports: [formData.selectedModality],
+        status: 'provisional', // Status provisório até finalizar matrícula
+        enrollmentDate: new Date().toISOString().split('T')[0], // Formato YYYY-MM-DD
+        monthlyFee: 0, // Será definido após matrícula
+        paymentStatus: 'pending',
+        lastPayment: null,
+      };
+
+      const { data: student, error: studentError } = await supabase
+        .from('students')
+        .insert([studentData])
+        .select()
+        .single();
+
+      if (studentError) throw studentError;
+
+      // 2. Criar registro da aula inaugural
+      const { error: inauguralError } = await supabase
+        .from('inaugural_classes')
+        .insert([{
+          student_id: student.id,
+          selected_date: formData.selectedDate,
+          selected_modality_id: formData.selectedModality,
+          status: 'scheduled',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }]);
+
+      if (inauguralError) throw inauguralError;
+
+      // 3. Atualizar o perfil do usuário para onboarding_completed: true
+      const { error: profileError } = await updateProfile({
+        onboarding_completed: true
+      });
+
+      if (profileError) throw profileError;
+
+      toast.success('Aula inaugural confirmada com sucesso! Redirecionando para seu dashboard...');
+
+      // 4. Redirecionar para o dashboard inaugural (será feito automaticamente pelo AuthContext)
+      // O AuthContext detectará que onboarding_completed = true e redirecionará
+      setTimeout(() => {
+        navigate('/inaugural-dashboard', { replace: true });
+      }, 1500);
+
+    } catch (error: any) {
+      console.error('Erro ao confirmar aula inaugural:', error);
+      toast.error(`Erro ao confirmar aula inaugural: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleMatricula = () => {
@@ -672,9 +715,18 @@ const InauguralClassPage: React.FC = () => {
                   </div>
                   
                   <div className="flex gap-4 mt-6">
-                    <Button onClick={handleConfirmClass} className="flex-1">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Confirmar Aula Inaugural
+                    <Button onClick={handleConfirmClass} className="flex-1" disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <>
+                          <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          Confirmando...
+                        </>
+                      ) : (
+                        <>
+                          <Calendar className="w-4 h-4 mr-2" />
+                          Confirmar Aula Inaugural
+                        </>
+                      )}
                     </Button>
                     <Button variant="outline" onClick={handleMatricula} className="flex-1">
                       <ArrowRight className="w-4 h-4 mr-2" />
