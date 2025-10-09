@@ -19,7 +19,17 @@ const Header: React.FC = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shadow-academy-glow">
+            <img
+              src="/assets/logo.png"
+              alt="Logo da Academia"
+              className="h-10 w-auto object-contain"
+              onError={(e) => {
+                // Fallback para o ícone padrão se a imagem não carregar
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling.style.display = 'flex';
+              }}
+            />
+            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shadow-academy-glow" style={{display: 'none'}}>
               <Trophy className="w-6 h-6 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold text-foreground">AcademyManager</span>
