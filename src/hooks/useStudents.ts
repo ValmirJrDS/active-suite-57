@@ -72,3 +72,30 @@ export const useInauguralClassByStudentId = (studentId: string | undefined) => {
     enabled: !!studentId, // A consulta só será executada se o studentId estiver disponível
   });
 };
+
+// Hook para buscar aluno efetivado pelo e-mail do responsável
+export const useEffectiveStudentByGuardianEmail = (email: string) => {
+  return useQuery({
+    queryKey: ['effectiveStudent', email],
+    queryFn: () => studentService.getEffectiveByGuardianEmail(email),
+    enabled: !!email,
+  });
+};
+
+// Hook para buscar pagamentos do aluno
+export const useStudentPayments = (studentId: string) => {
+  return useQuery({
+    queryKey: ['studentPayments', studentId],
+    queryFn: () => studentService.getPayments(studentId),
+    enabled: !!studentId,
+  });
+};
+
+// Hook para buscar eventos/aulas do aluno
+export const useStudentEvents = (studentId: string) => {
+  return useQuery({
+    queryKey: ['studentEvents', studentId],
+    queryFn: () => studentService.getEvents(studentId),
+    enabled: !!studentId,
+  });
+};

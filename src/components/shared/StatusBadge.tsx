@@ -21,7 +21,19 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' }) => {
   };
 
   const config = configs[status];
-  
+
+  // Se status não for reconhecido, usar um padrão
+  if (!config) {
+    return (
+      <span className={`
+        bg-gray-100 text-gray-800 ${sizeClasses[size]}
+        rounded-lg font-medium inline-flex items-center transition-all
+      `}>
+        {status || 'Unknown'}
+      </span>
+    );
+  }
+
   return (
     <span className={`
       ${config.bgColor} ${config.textColor} ${sizeClasses[size]}

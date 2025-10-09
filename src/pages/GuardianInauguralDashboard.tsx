@@ -11,18 +11,17 @@ import { Calendar, Clock, GraduationCap } from 'lucide-react';
 const GuardianInauguralDashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  
+
   // Busca o aluno provisório associado ao e-mail do responsável
   const { data: student, isLoading: studentLoading, isError: studentError, error: studentErrorMessage } = useProvisionalStudentByGuardianEmail(user?.email || '');
-  
+
   // Busca os detalhes da aula inaugural agendada para o aluno
   const { data: inauguralClass, isLoading: classLoading, isError: classError, error: classErrorMessage } = useInauguralClassByStudentId(student?.id || '');
 
   const handleFinishEnrollment = () => {
-    // Por enquanto, exibe um toast indicando a ação
-    toast.info('Funcionalidade de finalização de matrícula em desenvolvimento');
-    // Em uma implementação completa, isso redirecionaria para o fluxo de pagamento
-    // navigate('/enrollment/complete');
+    // Redirecionar para a página de matrícula/pagamento
+    // Os dados do estudante já cadastrados serão utilizados
+    navigate('/enrollment-signup?from=inaugural&student_id=' + student?.id);
   };
 
   if (studentLoading || classLoading) {
@@ -126,7 +125,7 @@ const GuardianInauguralDashboard: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="font-medium mb-1">Modalidade:</h4>
-                    <p>{inauguralClass.selectedModality}</p>
+                    <p>{inauguralClass.sports?.name || 'Modalidade não encontrada'}</p>
                   </div>
                 </>
               ) : (

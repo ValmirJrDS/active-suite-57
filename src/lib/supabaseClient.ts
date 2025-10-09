@@ -7,6 +7,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Supabase URL e/ou Anon Key não estão configurados no seu arquivo .env.local');
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    flowType: 'pkce',
+    redirectTo: `http://localhost:8080/auth/callback`
+  }
+});
 
 export default supabase;

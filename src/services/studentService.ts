@@ -166,11 +166,18 @@ export const studentService = {
     return data as Student;
   },
 
-  // Obter aula inaugural agendada pelo ID do aluno
+  // Obter aula inaugural agendada pelo ID do aluno com JOIN na tabela sports
   getInauguralClassByStudentId: async (studentId: string) => {
     const { data, error } = await supabase
       .from('inaugural_classes')
-      .select('*')
+      .select(`
+        *,
+        sports:selected_modality_id (
+          id,
+          name,
+          description
+        )
+      `)
       .eq('student_id', studentId)
       .eq('status', 'scheduled')
       .single();
@@ -181,6 +188,49 @@ export const studentService = {
     }
 
     return data;
+  },
+
+  // Obter aluno efetivado pelo e-mail do responsável
+  getEffectiveByGuardianEmail: async (email: string): Promise<Student | null> => {
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('guardian->>email', email)
+      .eq('status', 'effective')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null; // Não encontrado
+      throw error;
+    }
+
+    return data as Student;
+  },
+
+  // Obter pagamentos do aluno
+  getPayments: async (studentId: string) => {
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('student_id', studentId)
+      .order('due_date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Obter eventos/aulas do aluno
+  getEvents: async (studentId: string) => {
+    const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .contains('students', [studentId])
+      .gte('date', new Date().toISOString().split('T')[0]) // Apenas eventos futuros
+      .order('date', { ascending: true })
+      .limit(10);
+
+    if (error) throw error;
+    return data || [];
   }
 };
 
@@ -188,31 +238,70 @@ export const studentService = {
 
 // 1. Busca o aluno PROVISÓRIO pelo E-MAIL do responsável (que vem do usuário autenticado)
 export const getProvisionalStudentByGuardianEmail = async (email: string) => {
-  const { data, error } = await supabase
+  console.log('Buscando aluno provisório para email:', email);
+
+  // Como há múltiplos alunos, vamos buscar todos e filtrar
+  const { data: allStudents, error } = await supabase
     .from('students')
     .select('*')
-    .eq('guardian->>email', email) // Busca dentro do campo JSON guardian
-    .eq('status', 'provisional')
-    .single(); // Esperamos apenas um único resultado
+    .eq('status', 'provisional');
 
-  if (error && error.code !== 'PGRST116') { // Ignora o erro "sem resultados", que é esperado se não houver aluno
-    console.error('Erro ao buscar aluno provisório:', error);
+  console.log('Todos os alunos provisórios:', allStudents);
+
+  if (error) {
+    console.error('Erro ao buscar alunos provisórios:', error);
     throw error;
   }
-  return data;
+
+  // Filtrar manualmente pelo email do guardian
+  const foundStudent = allStudents?.find(student => {
+    console.log('Verificando aluno:', student.name, 'Guardian:', student.guardian);
+    return student.guardian && student.guardian.email === email;
+  });
+
+  console.log('Aluno encontrado na busca manual:', foundStudent);
+  return foundStudent || null;
 };
 
-// 2. Busca a aula inaugural pelo ID do aluno
+// 2. Busca a aula inaugural pelo ID do aluno com JOIN na tabela sports
 export const getInauguralClassByStudentId = async (studentId: string) => {
-  const { data, error } = await supabase
+  console.log('Buscando aula inaugural para student ID:', studentId);
+
+  // Primeiro buscar a aula inaugural sem o JOIN
+  const { data: inauguralClass, error } = await supabase
     .from('inaugural_classes')
     .select('*')
     .eq('student_id', studentId)
-    .single(); // Esperamos apenas um resultado
+    .eq('status', 'scheduled')
+    .maybeSingle();
 
-  if (error && error.code !== 'PGRST116') { // Ignora o erro "sem resultados"
+  console.log('Resultado da busca inaugural class:', { inauguralClass, error });
+
+  if (error && error.code !== 'PGRST116') {
     console.error('Erro ao buscar aula inaugural:', error);
     throw error;
   }
-  return data;
+
+  if (!inauguralClass) {
+    console.log('Nenhuma aula inaugural encontrada');
+    return null;
+  }
+
+  // Depois buscar os dados do sport separadamente
+  const { data: sport, error: sportError } = await supabase
+    .from('sports')
+    .select('id, name, description')
+    .eq('id', inauguralClass.selected_modality_id)
+    .single();
+
+  console.log('Resultado da busca sport:', { sport, sportError });
+
+  // Combinar os dados
+  const result = {
+    ...inauguralClass,
+    sports: sport || null
+  };
+
+  console.log('Resultado final da aula inaugural:', result);
+  return result;
 };

@@ -30,7 +30,12 @@ export default function SignUp() {
     setLoading(true);
 
     try {
-      const { error } = await signUp(email, password, fullName);
+      const { error } = await signUp(email, password, {
+        data: {
+          full_name: fullName,
+          registration_flow: 'enrollment' // Admin será enrollment
+        }
+      });
       
       if (error) {
         toast.error(error.message || "Erro ao registrar usuário");
@@ -68,6 +73,7 @@ export default function SignUp() {
                 placeholder="Seu nome completo"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                autoComplete="name"
                 required
               />
             </div>
@@ -79,6 +85,7 @@ export default function SignUp() {
                 placeholder="seu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 required
               />
             </div>
@@ -90,6 +97,7 @@ export default function SignUp() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
                 minLength={6}
                 required
               />
@@ -102,6 +110,7 @@ export default function SignUp() {
                 placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
                 minLength={6}
                 required
               />

@@ -75,64 +75,77 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
-    // Verificação inicial da sessão para remover a tela de loading
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
-    });
+    let isMounted = true;
 
-    // Ouvinte para futuras mudanças de estado (login, logout) com roteamento condicional
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null);
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
 
-      // Só fazer roteamento automático em eventos específicos de login/logout
-      if (event === 'SIGNED_IN' && session?.user) {
-        // Se o usuário fez login, buscamos seu perfil na tabela 'profiles'
-        const { data: userProfile } = await supabase
-          .from('profiles')
-          .select('onboarding_completed, registration_flow')
-          .eq('id', session.user.id)
-          .single();
+        if (!isMounted) return;
 
-        if (userProfile) {
-          setProfile(userProfile);
+        setSession(session);
+        setUser(session?.user ?? null);
 
-          // LÓGICA DE ROTEAMENTO BASEADA NO REGISTRATION_FLOW
-          const onboardingCompleted = userProfile.onboarding_completed;
-          const registrationFlow = userProfile.registration_flow;
-
-          if (registrationFlow === 'inaugural') {
-            // Usuário responsável (aula inaugural)
-            if (onboardingCompleted === false) {
-              // Ainda não cadastrou o aluno -> vai para cadastro do aluno
-              navigate('/inaugural-class', { replace: true });
-            } else {
-              // Já cadastrou o aluno -> dashboard inaugural
-              navigate('/inaugural-dashboard', { replace: true });
-            }
-          } else if (registrationFlow === 'enrollment') {
-            // Usuário aluno efetivado (matrícula direta) - implementação futura
-            navigate('/student-dashboard', { replace: true });
-          } else {
-            // Para usuários sem registration_flow definido, verificar se podem ser inaugural
-            await checkAndHandleNewInauguralUser(session.user, userProfile);
-          }
-        } else {
-          // Se não houver perfil, assumir que é admin e ir para dashboard principal
-          navigate('/', { replace: true });
+        // Se há usuário logado, buscar o profile (sem bloquear o loading)
+        if (session?.user) {
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single()
+            .then(({ data: userProfile, error: profileError }) => {
+              if (isMounted) {
+                if (!profileError && userProfile) {
+                  setProfile(userProfile);
+                } else {
+                  setProfile(null);
+                }
+              }
+            });
         }
+      } catch (error) {
+        console.error('Erro de conexão com Supabase:', error);
+        if (isMounted) {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    // Ouvinte para futuras mudanças de estado (login, logout) - SEM roteamento automático
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
+      setUser(session?.user ?? null);
+      setSession(session);
+
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Buscar profile sem bloquear
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data: userProfile }) => {
+            if (isMounted) {
+              setProfile(userProfile || null);
+            }
+          });
       } else if (event === 'SIGNED_OUT') {
         setProfile(null);
-        navigate('/login', { replace: true });
       }
-      // Não fazer roteamento automático para outros eventos (como TOKEN_REFRESHED, INITIAL_SESSION, etc.)
-
-      setIsLoading(false);
     });
 
     // Limpa o ouvinte quando o componente é desmontado para evitar vazamentos de memória
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, [navigate]);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,9 +11,14 @@ const LoginForm: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
-  const { signIn, signInWithGoogle, user, isLoading: authIsLoading } = useAuth();
+  const [searchParams] = useSearchParams();
+
+  const { signIn, user, isLoading: authIsLoading } = useAuth();
   const navigate = useNavigate();
+
+  const redirectType = searchParams.get('redirect');
+  console.log('Redirect type:', redirectType);
+  console.log('Current URL params:', searchParams.toString());
 
   // Redireciona se o usuário já estiver autenticado
   useEffect(() => {
@@ -37,16 +42,17 @@ const LoginForm: React.FC = () => {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    try {
-      await signInWithGoogle();
-      // signInWithGoogle redireciona automaticamente após sucesso
-    } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login com Google');
-      setIsLoading(false);
-    }
-  };
+
+  // const handleGoogleLogin = async () => {
+  //   setIsLoading(true);
+  //   try {
+  //     await signInWithGoogle();
+  //     // signInWithGoogle redireciona automaticamente após sucesso
+  //   } catch (err: any) {
+  //     setError(err.message || 'Erro ao fazer login com Google');
+  //     setIsLoading(false);
+  //   }
+  // };
 
   // Se o usuário já estiver autenticado, não mostrar o formulário
   if (!authIsLoading && user) {
@@ -54,11 +60,12 @@ const LoginForm: React.FC = () => {
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Login</CardTitle>
-        <CardDescription>Entre em sua conta do AcademyManager</CardDescription>
-      </CardHeader>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <Card className="w-full max-w-md bg-card border border-border shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-foreground">Login</CardTitle>
+          <CardDescription className="text-muted-foreground">Entre em sua conta do AcademyManager</CardDescription>
+        </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
           {error && (
@@ -73,6 +80,7 @@ const LoginForm: React.FC = () => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               required
             />
           </div>
@@ -83,6 +91,7 @@ const LoginForm: React.FC = () => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
               required
             />
           </div>
@@ -91,24 +100,21 @@ const LoginForm: React.FC = () => {
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? 'Entrando...' : 'Entrar'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full mt-2"
-            onClick={handleGoogleLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Entrando...' : 'Entrar com Google'}
-          </Button>
+
+
           <div className="mt-4 text-center text-sm">
             Ainda não tem uma conta?{' '}
-            <Link to="/signup" className="underline">
+            <Link
+              to={redirectType === 'inaugural' ? '/inaugural-signup' : '/signup'}
+              className="underline"
+            >
               Cadastre-se
             </Link>
           </div>
         </CardFooter>
       </form>
     </Card>
+    </div>
   );
 };
 

@@ -152,6 +152,13 @@ const InauguralClassPage: React.FC = () => {
     }
   }, [formData.birthDate]);
 
+  // Função para gerar UUID válido baseado no ID do sport
+  const generateModalityUuid = (sportId: string) => {
+    // Criar um UUID baseado no sportId, preenchendo com zeros
+    const paddedId = sportId.padStart(8, '0');
+    return `${paddedId}-0000-0000-0000-000000000000`;
+  };
+
   const handleConfirmClass = async () => {
     if (!formData.name || !formData.birthDate || !formData.selectedDate || !formData.selectedModality) {
       toast.error('Preencha todos os campos obrigatórios!');
@@ -166,11 +173,24 @@ const InauguralClassPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      // 1. Criar o aluno na tabela students com status provisional
+      // 1. Verificar se já existe aluno com o mesmo CPF (se CPF foi fornecido)
+      if (formData.cpf) {
+        const { data: existingStudent } = await supabase
+          .from('students')
+          .select('id')
+          .eq('cpf', formData.cpf)
+          .single();
+
+        if (existingStudent) {
+          throw new Error('Já existe um aluno cadastrado com este CPF.');
+        }
+      }
+
+      // 2. Criar o aluno na tabela students com status provisional
       const studentData = {
         name: formData.name,
         birthDate: formData.birthDate,
-        cpf: formData.cpf || `temp-${Date.now()}`, // CPF temporário se não fornecido
+        cpf: formData.cpf || `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`, // CPF único temporário
         photo: formData.photo || null,
         address: formData.address,
         guardian: {
@@ -179,7 +199,7 @@ const InauguralClassPage: React.FC = () => {
         },
         emergencyContacts: formData.emergencyContacts,
         healthInfo: formData.healthInfo,
-        enrolledSports: [formData.selectedModality],
+        enrolledSports: [generateModalityUuid(formData.selectedModality)],
         status: 'provisional', // Status provisório até finalizar matrícula
         enrollmentDate: new Date().toISOString().split('T')[0], // Formato YYYY-MM-DD
         monthlyFee: 0, // Será definido após matrícula
@@ -195,13 +215,13 @@ const InauguralClassPage: React.FC = () => {
 
       if (studentError) throw studentError;
 
-      // 2. Criar registro da aula inaugural
+      // 3. Criar registro da aula inaugural
       const { error: inauguralError } = await supabase
         .from('inaugural_classes')
         .insert([{
           student_id: student.id,
           selected_date: formData.selectedDate,
-          selected_modality_id: formData.selectedModality,
+          selected_modality_id: generateModalityUuid(formData.selectedModality), // Converter para UUID válido
           status: 'scheduled',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -209,7 +229,7 @@ const InauguralClassPage: React.FC = () => {
 
       if (inauguralError) throw inauguralError;
 
-      // 3. Atualizar o perfil do usuário para onboarding_completed: true
+      // 4. Atualizar o perfil do usuário para onboarding_completed: true
       const { error: profileError } = await updateProfile({
         onboarding_completed: true
       });
@@ -218,7 +238,7 @@ const InauguralClassPage: React.FC = () => {
 
       toast.success('Aula inaugural confirmada com sucesso! Redirecionando para seu dashboard...');
 
-      // 4. Redirecionar para o dashboard inaugural (será feito automaticamente pelo AuthContext)
+      // 5. Redirecionar para o dashboard inaugural (será feito automaticamente pelo AuthContext)
       // O AuthContext detectará que onboarding_completed = true e redirecionará
       setTimeout(() => {
         navigate('/inaugural-dashboard', { replace: true });
