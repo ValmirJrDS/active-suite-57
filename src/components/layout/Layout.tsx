@@ -21,7 +21,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="flex items-center gap-4">
               <SidebarTrigger />
               <Link to="/" className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <img
+                  src="/assets/logo.png"
+                  alt="Logo da Academia"
+                  className="h-12 w-auto object-contain"
+                  onError={(e) => {
+                    // Fallback para o ícone padrão se a imagem não carregar
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling.style.display = 'flex';
+                  }}
+                />
+                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center" style={{display: 'none'}}>
                   <Trophy className="w-5 h-5 text-primary-foreground" />
                 </div>
                 <span className="text-lg font-bold text-foreground">AcademyManager</span>
