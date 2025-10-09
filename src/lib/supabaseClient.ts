@@ -1,10 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+console.log('Supabase Config:', {
+  url: supabaseUrl ? 'Present' : 'Missing',
+  key: supabaseAnonKey ? 'Present' : 'Missing',
+  env: import.meta.env.MODE
+});
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase URL e/ou Anon Key não estão configurados no seu arquivo .env.local');
+  console.error('Environment variables:', {
+    VITE_SUPABASE_URL: supabaseUrl,
+    VITE_SUPABASE_ANON_KEY: supabaseAnonKey ? 'EXISTS' : 'MISSING'
+  });
+  throw new Error('Supabase URL e/ou Anon Key não estão configurados nas variáveis de ambiente');
+}
+
+// Validar se a URL é válida
+try {
+  new URL(supabaseUrl);
+} catch (error) {
+  throw new Error(`URL do Supabase inválida: ${supabaseUrl}`);
 }
 
 const getRedirectUrl = () => {
