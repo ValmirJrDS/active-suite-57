@@ -1,226 +1,143 @@
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import supabase from "@/lib/supabaseClient";
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 const EnrollmentSignUp = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInauguralTransition, setIsInauguralTransition] = useState(false);
-  const [studentData, setStudentData] = useState<any>(null);
+  console.log('EnrollmentSignUp component loading...');
 
-  const { signUp, user, updateProfile } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const { signUp } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Verificar se é transição de usuário inaugural
-  const fromInaugural = searchParams.get('from') === 'inaugural';
-  const studentId = searchParams.get('student_id');
+  const [formData, setFormData] = useState({
+    guardianName: '',
+    guardianEmail: '',
+    password: '',
+  });
 
-  // Carregar dados do estudante se for transição inaugural
-  useEffect(() => {
-    if (fromInaugural && studentId && user) {
-      setIsInauguralTransition(true);
-      loadStudentData();
-    }
-  }, [fromInaugural, studentId, user]);
-
-  const loadStudentData = async () => {
-    try {
-      const { data: student, error } = await supabase
-        .from('students')
-        .select('*')
-        .eq('id', studentId)
-        .single();
-
-      if (error) throw error;
-      setStudentData(student);
-    } catch (error: any) {
-      toast.error('Erro ao carregar dados do estudante: ' + error.message);
-    }
-  };
-
-  const handleInauguralTransition = async () => {
-    setIsLoading(true);
-    try {
-      // Atualizar status do estudante de provisional para effective
-      const { error: studentError } = await supabase
-        .from('students')
-        .update({ status: 'effective' })
-        .eq('id', studentId);
-
-      if (studentError) throw studentError;
-
-      // Atualizar perfil do usuário para enrollment
-      await updateProfile({
-        registration_flow: 'enrollment',
-        onboarding_completed: true
-      });
-
-      toast.success('Matrícula finalizada com sucesso!');
-      navigate('/enrollment-dashboard');
-    } catch (error: any) {
-      toast.error('Erro ao finalizar matrícula: ' + error.message);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
+    setFormData(prev => ({ ...prev, [id]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    console.log('Formulário matrícula submetido!');
+    console.log('Form data:', formData);
 
-    // Se é transição inaugural, apenas processar pagamento/finalização
-    if (isInauguralTransition) {
-      await handleInauguralTransition();
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      toast.error("As senhas não coincidem");
-      setIsLoading(false);
-      return;
-    }
+    setIsSubmitting(true);
 
     try {
-      const { error } = await signUp(email, password, {
-        data: {
-          full_name: fullName,
-          registration_flow: 'enrollment'
+      if (!formData.guardianName || !formData.guardianEmail || !formData.password) {
+        console.error('Campos obrigatórios não preenchidos');
+        throw new Error('Por favor, preencha todos os campos obrigatórios.');
+      }
+
+      console.log('Iniciando signup de matrícula com Supabase...');
+
+      // Criar usuário com metadados para o Supabase
+      const { data: signUpData, error } = await signUp(
+        formData.guardianEmail,
+        formData.password,
+        {
+          data: {
+            full_name: formData.guardianName,
+            registration_flow: 'enrollment',
+            onboarding_completed: false,
+          }
         }
-      });
+      );
+
+      console.log('Resultado do signup matrícula:', { signUpData, error });
 
       if (error) {
-        toast.error(error.message);
-      } else {
-        toast.success("Cadastro realizado! Verifique seu e-mail para confirmar.");
-        navigate("/login");
+        console.error('Erro do Supabase:', error);
+        throw error;
       }
+
+      if (signUpData?.user) {
+        toast.success("Cadastro realizado com sucesso! Verifique seu e-mail para confirmar a conta antes de fazer login.");
+
+        // Limpar formulário após sucesso
+        setFormData({
+          guardianName: '',
+          guardianEmail: '',
+          password: '',
+        });
+
+        // Não redirecionar automaticamente - aguardar confirmação de email
+      } else {
+        throw new Error('Erro inesperado durante o cadastro');
+      }
+
     } catch (error: any) {
-      toast.error("Erro ao criar conta: " + error.message);
+      console.error("Erro no processo de cadastro de matrícula:", error);
+      toast.error(`Erro no cadastro: ${error.message}`);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
+  console.log('Renderizando EnrollmentSignUp...');
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-      <Card className="w-full max-w-md bg-card border border-border shadow-lg">
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
+      <Card className="w-full max-w-2xl">
         <CardHeader>
-          <CardTitle className="text-foreground">
-            {isInauguralTransition ? 'Finalizar Matrícula' : 'Matrícula Direta'}
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            {isInauguralTransition
-              ? 'Finalize a matrícula do seu filho e efetue o pagamento'
-              : 'Crie sua conta para efetuar a matrícula do seu filho'
-            }
-          </CardDescription>
+          <CardTitle className="text-2xl">Cadastro para Matrícula</CardTitle>
+          <CardDescription>Crie sua conta de responsável para realizar a matrícula do seu filho na academia.</CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {isInauguralTransition && studentData ? (
-              // Mostrar dados do estudante para confirmação
-              <div className="space-y-4">
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <h3 className="font-semibold text-green-800 mb-2">Dados do Estudante</h3>
-                  <p><strong>Nome:</strong> {studentData.name}</p>
-                  <p><strong>Data de Nascimento:</strong> {new Date(studentData.birthDate).toLocaleDateString('pt-BR')}</p>
-                  <p><strong>Status:</strong> Provisório (será efetivado após pagamento)</p>
+        <form onSubmit={(e) => {
+          console.log('Form onSubmit triggered!');
+          handleSubmit(e);
+        }}>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg border-b pb-2">Seus Dados</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="guardianName">Nome Completo</Label>
+                  <Input id="guardianName" value={formData.guardianName} onChange={handleInputChange} autoComplete="name" required />
                 </div>
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <h3 className="font-semibold text-blue-800 mb-2">Informações de Pagamento</h3>
-                  <p>Mensalidade: R$ {studentData.monthlyFee || '150,00'}</p>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Ao finalizar, o estudante será efetivado e terá acesso a todas as atividades.
-                  </p>
+                <div className="space-y-2">
+                  <Label htmlFor="guardianEmail">E-mail</Label>
+                  <Input id="guardianEmail" type="email" value={formData.guardianEmail} onChange={handleInputChange} autoComplete="email" required />
                 </div>
               </div>
-            ) : (
-              // Formulário de cadastro normal
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Nome Completo</Label>
-                  <Input
-                    id="fullName"
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required
-                    placeholder="Seu nome completo"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">E-mail</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="seu@email.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Senha</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    placeholder="Crie uma senha segura"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    placeholder="Confirme sua senha"
-                  />
-                </div>
-              </>
-            )}
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isInauguralTransition ? 'Finalizando...' : 'Criando conta...'}
-                </>
-              ) : (
-                isInauguralTransition ? "Finalizar Matrícula e Pagar" : "Criar Conta e Continuar"
-              )}
-            </Button>
-            {!isInauguralTransition && (
-              <>
-                <div className="text-center text-sm">
-                  Já tem uma conta?{" "}
-                  <Link to="/login" className="underline">
-                    Faça login
-                  </Link>
-                </div>
-                <div className="text-center text-sm">
-                  Quer participar da aula inaugural?{" "}
-                  <Link to="/inaugural-signup" className="underline">
-                    Aula Inaugural
-                  </Link>
-                </div>
-              </>
-            )}
+              <div className="space-y-2">
+                <Label htmlFor="password">Crie uma Senha</Label>
+                <Input id="password" type="password" value={formData.password} onChange={handleInputChange} autoComplete="new-password" required minLength={6} />
+              </div>
+            </div>
+
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800">
+                <strong>Próximo passo:</strong> Após criar sua conta e fazer login, você será direcionado para preencher o formulário completo de matrícula do seu filho.
+              </p>
+            </div>
           </CardContent>
+          <CardFooter className="flex flex-col">
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isSubmitting}
+              onClick={() => console.log('Botão clicado!')}
+            >
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Criar Conta"}
+            </Button>
+            <div className="mt-4 text-center text-sm">
+              Já tem uma conta?{' '}
+              <Link to="/login?redirect=enrollment" className="underline">
+                Faça o login
+              </Link>
+            </div>
+          </CardFooter>
         </form>
       </Card>
     </div>

@@ -37,8 +37,16 @@ const AuthCallback: React.FC = () => {
               console.log('AuthCallback: Redirecting to inaugural-dashboard');
               navigate('/inaugural-dashboard', { replace: true });
             }
+          } else if (profile.registration_flow === 'enrollment') {
+            if (profile.onboarding_completed === false) {
+              console.log('AuthCallback: Redirecting to enrollment-form');
+              navigate('/enrollment-form', { replace: true });
+            } else {
+              console.log('AuthCallback: Redirecting to enrollment-dashboard');
+              navigate('/enrollment-dashboard', { replace: true });
+            }
           } else {
-            console.log('AuthCallback: Redirecting to home');
+            console.log('AuthCallback: Redirecting to home (admin)');
             navigate('/', { replace: true });
           }
         } else if (!isLoading && !user) {

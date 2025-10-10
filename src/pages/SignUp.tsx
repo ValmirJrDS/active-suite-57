@@ -33,7 +33,7 @@ export default function SignUp() {
       const { error } = await signUp(email, password, {
         data: {
           full_name: fullName,
-          registration_flow: 'enrollment' // Admin será enrollment
+          registration_flow: 'admin' // Usuários criados via /signup são admins
         }
       });
       

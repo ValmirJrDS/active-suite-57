@@ -60,7 +60,26 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       return;
     }
 
-    // Se é admin/enrollment ou qualquer outro - acesso total
+    // Se é matrícula/enrollment
+    if (registration_flow === 'enrollment') {
+      console.log('User is enrollment type');
+      if (onboarding_completed === false) {
+        console.log('Enrollment onboarding not completed, should go to enrollment-form');
+        if (currentPath !== '/enrollment-form') {
+          console.log('Redirecting to /enrollment-form');
+          navigate('/enrollment-form', { replace: true });
+        }
+      } else {
+        console.log('Enrollment completed, should go to enrollment-dashboard');
+        if (currentPath !== '/enrollment-dashboard') {
+          console.log('Redirecting to /enrollment-dashboard');
+          navigate('/enrollment-dashboard', { replace: true });
+        }
+      }
+      return;
+    }
+
+    // Se é admin ou qualquer outro - acesso total
     if (currentPath === '/login' || currentPath === '/signup' || currentPath === '/inaugural-signup' || currentPath === '/enrollment-signup') {
       console.log('Logged user on public page, redirecting to home');
       navigate('/', { replace: true });

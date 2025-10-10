@@ -32,22 +32,41 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Verificar se usuário não-admin está tentando acessar páginas não permitidas
   // IMPORTANTE: Só fazer redirecionamento se profile estiver carregado
-  if (profile && profile.registration_flow === 'inaugural') {
+  if (profile) {
     const currentPath = location.pathname;
 
-    // Páginas permitidas para usuários inaugurais (provisórios)
-    const allowedInauguralPaths = [
-      '/inaugural-class',
-      '/inaugural-dashboard',
-      '/enrollment-signup' // Para quando finalizar matrícula
-    ];
+    // USUÁRIOS INAUGURAIS - acesso limitado
+    if (profile.registration_flow === 'inaugural') {
+      const allowedInauguralPaths = [
+        '/inaugural-class',
+        '/inaugural-dashboard',
+        '/enrollment-signup' // Para quando finalizar matrícula
+      ];
 
-    // Se está tentando acessar página não permitida, redirecionar para dashboard inaugural
-    if (!allowedInauguralPaths.includes(currentPath)) {
-      if (profile.onboarding_completed === false) {
-        return <Navigate to="/inaugural-class" replace />;
-      } else {
-        return <Navigate to="/inaugural-dashboard" replace />;
+      // Se está tentando acessar página não permitida, redirecionar para dashboard inaugural
+      if (!allowedInauguralPaths.includes(currentPath)) {
+        if (profile.onboarding_completed === false) {
+          return <Navigate to="/inaugural-class" replace />;
+        } else {
+          return <Navigate to="/inaugural-dashboard" replace />;
+        }
+      }
+    }
+
+    // USUÁRIOS ENROLLMENT - acesso apenas ao próprio dashboard
+    if (profile.registration_flow === 'enrollment') {
+      const allowedEnrollmentPaths = [
+        '/enrollment-form',
+        '/enrollment-dashboard'
+      ];
+
+      // Se está tentando acessar página não permitida, redirecionar para dashboard
+      if (!allowedEnrollmentPaths.includes(currentPath)) {
+        if (profile.onboarding_completed === false) {
+          return <Navigate to="/enrollment-form" replace />;
+        } else {
+          return <Navigate to="/enrollment-dashboard" replace />;
+        }
       }
     }
   }
