@@ -23,6 +23,9 @@ import Modalities from "./pages/Modalities";
 import NewStudent from "./pages/NewStudent";
 import NewEvent from "./pages/NewEvent";
 import Reports from "./pages/Reports";
+import NFSe from "./pages/NFSe";
+import NFSeEmit from "./pages/NFSeEmit";
+import Marketing from "./pages/Marketing";
 import InauguralClass from "./pages/InauguralClass";
 import InauguralSignUp from "./pages/InauguralSignUp";
 import EnrollmentSignUp from "./pages/EnrollmentSignUp";
@@ -68,6 +71,9 @@ const AppContent = () => {
         <Route path="/employees" element={<ProtectedRoute allowedFlows={['admin']}><Employees /></ProtectedRoute>} />
         <Route path="/modalities" element={<ProtectedRoute allowedFlows={['admin']}><Modalities /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute allowedFlows={['admin']}><Reports /></ProtectedRoute>} />
+        <Route path="/marketing" element={<ProtectedRoute allowedFlows={['admin']}><Marketing /></ProtectedRoute>} />
+        <Route path="/nfs-e" element={<ProtectedRoute allowedFlows={['admin']}><NFSe /></ProtectedRoute>} />
+        <Route path="/nfs-e/emit" element={<ProtectedRoute allowedFlows={['admin']}><NFSeEmit /></ProtectedRoute>} />
         <Route path="/students/new" element={<ProtectedRoute allowedFlows={['admin']}><NewStudent /></ProtectedRoute>} />
         <Route path="/events/new" element={<ProtectedRoute allowedFlows={['admin']}><NewEvent /></ProtectedRoute>} />
         <Route path="/events/edit/:id" element={<ProtectedRoute allowedFlows={['admin']}><NewEvent /></ProtectedRoute>} />

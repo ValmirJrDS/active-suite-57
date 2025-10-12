@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { DollarSign, FileText, Send, Check, Filter } from 'lucide-react';
+import { DollarSign, FileText, Send, Check, Filter, Receipt } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { mockPayments } from '@/data/mockPayments';
 import { Payment } from '@/types';
 import StatusBadge from '@/components/shared/StatusBadge';
 import Button from '@/components/shared/Button';
 
 const Financial: React.FC = () => {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<'all' | 'paid' | 'pending' | 'overdue'>('all');
   const [selectedPayments, setSelectedPayments] = useState<string[]>([]);
 
@@ -226,6 +228,16 @@ const Financial: React.FC = () => {
                           onClick={() => console.log('Mark as paid:', payment.id)}
                         >
                           <Check className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {payment.status === 'paid' && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => navigate(`/nfs-e/emit?paymentId=${payment.id}`)}
+                          title="Emitir NFS-e"
+                        >
+                          <Receipt className="w-4 h-4" />
                         </Button>
                       )}
                       <Button

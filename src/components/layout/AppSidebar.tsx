@@ -15,7 +15,8 @@ import {
   PieChart,
   Trophy,
   ChevronDown,
-  LogOut
+  LogOut,
+  Megaphone
 } from 'lucide-react';
 import {
   Sidebar,
@@ -43,6 +44,8 @@ const menuGroups = [
     label: 'Administração',
     items: [
       { title: 'Financeiro', url: '/financial', icon: DollarSign },
+      { title: 'Marketing', url: '/marketing', icon: Megaphone },
+      { title: 'Notas Fiscais', url: '/nfs-e', icon: FileText },
       { title: 'Funções', url: '/roles', icon: UserCog },
       { title: 'Funcionários', url: '/employees', icon: Building }
     ]
