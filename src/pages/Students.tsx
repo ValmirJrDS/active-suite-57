@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Users, UserPlus, Search, Download, Eye } from 'lucide-react';
 import { useStudents } from '@/hooks/useStudents';
+import { useSports } from '@/hooks/useSports';
 import { useQueryClient } from '@tanstack/react-query';
 import { mockSports } from '@/data/mockSports';
 import { Student } from '@/types';
@@ -18,6 +19,7 @@ const Students: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
   const { data: students, isLoading, isError } = useStudents();
+  const { data: sports, isLoading: sportsLoading } = useSports();
 
   // Se houver erro ao carregar os dados
   if (isError) {
@@ -56,9 +58,20 @@ const Students: React.FC = () => {
   };
 
   const getSportNames = (sportIds: string[]) => {
-    return sportIds.map(id => 
-      mockSports.find(sport => sport.id === id)?.name || id
-    ).join(', ');
+    if (!sports) return sportIds.join(', '); // Fallback se sports ainda não carregaram
+
+    return sportIds.map(id => {
+      // Primeiro tenta buscar nos dados reais do Supabase
+      const realSport = sports.find(sport => sport.id === id);
+      if (realSport) return realSport.name;
+
+      // Se não encontrar, tenta nos dados mock (para compatibilidade com dados antigos)
+      const mockSport = mockSports.find(sport => sport.id === id);
+      if (mockSport) return mockSport.name;
+
+      // Se não encontrar em nenhum lugar, retorna o ID
+      return `Modalidade (${id})`;
+    }).join(', ');
   };
 
   return (
@@ -102,8 +115,13 @@ const Students: React.FC = () => {
             className="bg-input border border-border rounded-lg px-3 py-2 text-foreground"
           >
             <option value="all">Todas as modalidades</option>
-            {mockSports.map(sport => (
+            {/* Modalidades reais do Supabase */}
+            {sports?.map(sport => (
               <option key={sport.id} value={sport.id}>{sport.name}</option>
+            ))}
+            {/* Modalidades mock para compatibilidade */}
+            {mockSports.map(sport => (
+              <option key={`mock-${sport.id}`} value={sport.id}>{sport.name}</option>
             ))}
           </select>
           
@@ -121,7 +139,7 @@ const Students: React.FC = () => {
       </div>
 
       {/* Students Grid */}
-      {isLoading ? (
+      {(isLoading || sportsLoading) ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[...Array(8)].map((_, index) => (
             <div key={index} className="bg-card border border-border rounded-lg p-6 shadow-academy">
@@ -291,13 +309,25 @@ const Students: React.FC = () => {
                 <h3 className="font-semibold text-foreground mb-3">Modalidades</h3>
                 <div className="space-y-2">
                   {selectedStudent.enrolledSports.map(sportId => {
-                    const sport = mockSports.find(s => s.id === sportId);
+                    // Primeiro tenta buscar nos dados reais do Supabase
+                    let sport = sports?.find(s => s.id === sportId);
+
+                    // Se não encontrar, tenta nos dados mock
+                    if (!sport) {
+                      sport = mockSports.find(s => s.id === sportId);
+                    }
+
                     return sport ? (
                       <div key={sportId} className="flex items-center justify-between">
                         <span className="text-foreground">{sport.name}</span>
                         <span className="text-sm text-success">R$ {(sport.monthlyFee || 0).toFixed(2)}</span>
                       </div>
-                    ) : null;
+                    ) : (
+                      <div key={sportId} className="flex items-center justify-between">
+                        <span className="text-foreground">Modalidade ({sportId})</span>
+                        <span className="text-sm text-muted-foreground">Carregando...</span>
+                      </div>
+                    );
                   })}
                   <div className="pt-2 border-t border-border">
                     <div className="flex items-center justify-between font-semibold">

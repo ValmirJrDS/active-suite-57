@@ -22,6 +22,7 @@ import Employees from "./pages/Employees";
 import Modalities from "./pages/Modalities";
 import NewStudent from "./pages/NewStudent";
 import NewEvent from "./pages/NewEvent";
+import Reports from "./pages/Reports";
 import InauguralClass from "./pages/InauguralClass";
 import InauguralSignUp from "./pages/InauguralSignUp";
 import EnrollmentSignUp from "./pages/EnrollmentSignUp";
@@ -66,8 +67,10 @@ const AppContent = () => {
         <Route path="/roles" element={<ProtectedRoute allowedFlows={['admin']}><Roles /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute allowedFlows={['admin']}><Employees /></ProtectedRoute>} />
         <Route path="/modalities" element={<ProtectedRoute allowedFlows={['admin']}><Modalities /></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute allowedFlows={['admin']}><Reports /></ProtectedRoute>} />
         <Route path="/students/new" element={<ProtectedRoute allowedFlows={['admin']}><NewStudent /></ProtectedRoute>} />
         <Route path="/events/new" element={<ProtectedRoute allowedFlows={['admin']}><NewEvent /></ProtectedRoute>} />
+        <Route path="/events/edit/:id" element={<ProtectedRoute allowedFlows={['admin']}><NewEvent /></ProtectedRoute>} />
         <Route path="/inaugural-class" element={<ProtectedRoute><InauguralClass /></ProtectedRoute>} />
         <Route path="/enrollment-form" element={<ProtectedRoute><EnrollmentForm /></ProtectedRoute>} />
         <Route path="/inaugural-dashboard" element={<ProtectedRoute><GuardianInauguralDashboard /></ProtectedRoute>} />

@@ -59,8 +59,8 @@ const menuGroups = [
   {
     label: 'Relatórios',
     items: [
-      { title: 'Dashboard Financeiro', url: '/reports/financial', icon: TrendingUp },
-      { title: 'Curva ABC', url: '/reports/abc', icon: PieChart }
+      { title: 'Analytics & ABC', url: '/reports', icon: TrendingUp },
+      { title: 'Dashboard', url: '/', icon: PieChart }
     ]
   },
   {

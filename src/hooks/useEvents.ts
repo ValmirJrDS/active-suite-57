@@ -22,19 +22,29 @@ const convertDBEventToUIEvent = (dbEvent: DBEvent): UIEvent => {
 };
 
 // Função para converter dados da UI para o formato do banco
-const convertUIEventToDBEvent = (uiEvent: UIEvent): Omit<DBEvent, 'id' | 'created_at' | 'updated_at'> => {
-  return {
+const convertUIEventToDBEvent = (uiEvent: any): Omit<DBEvent, 'id' | 'created_at' | 'updated_at'> => {
+  const dbEvent = {
     title: uiEvent.title,
-    description: uiEvent.description,
+    description: uiEvent.description || '',
     date: uiEvent.date,
     start_time: uiEvent.startTime,
     end_time: uiEvent.endTime,
     location: uiEvent.location,
     event_type: uiEvent.type,
-    modality_id: uiEvent.sport_id,
-    teacher_id: uiEvent.instructor_id,
-    // Mapear outros campos conforme necessário
+    modality_id: uiEvent.sport_id || null,
+    teacher_id: uiEvent.instructor_id || null,
+    // Campos adicionais que criamos
+    max_participants: uiEvent.max_participants || null,
+    current_participants: uiEvent.current_participants || 0,
+    is_inaugural: uiEvent.is_inaugural || false,
+    recurring_pattern: uiEvent.recurring_pattern || null,
+    created_by: uiEvent.created_by || null,
+    students: uiEvent.students || [],
+    frequency: uiEvent.frequency || null,
+    days_of_week: uiEvent.days_of_week || null,
   };
+
+  return dbEvent;
 };
 
 const useEvents = () => {
